@@ -77,7 +77,7 @@ type LoadedTarget = JestTarget & {
 
 export async function analyze(options: AnalyzeOptions): Promise<Report> {
   const started = performance.now();
-  const root = options.workspaceRoot;
+  const root = resolve(options.workspaceRoot);
   const settings = options.settings ?? loadSettings(root);
   const base = resolveCommit(root, options.base);
   const head = resolveCommit(root, options.head);

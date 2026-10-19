@@ -36,27 +36,35 @@ const DEFAULT_EXTENSIONS = ['js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx'
 type RawConfig = Record<string, unknown>;
 
 export async function loadJestProjectConfig(
-  configFile: string,
+  file: string,
   evaluator: ConfigEvaluator,
 ): Promise<JestProjectConfig> {
+  // Absolute before the config's directory becomes the cwd below.
+  const configFile = resolve(file);
   const missingBefore = new Set(evaluator.missingPackages);
-  const raw = await evaluator.loadConfig(configFile);
-  const rootDir = resolve(dirname(configFile), typeof raw.rootDir === 'string' ? raw.rootDir : '.');
-  const configModules = new Set<string>(evaluator.dependenciesOf(configFile).files);
+  const configModules = new Set<string>();
   const runtimeInputs = new Set<string>();
-  const configPackages = new Set<string>(['jest', ...evaluator.dependenciesOf(configFile).packages]);
+  const configPackages = new Set<string>(['jest']);
 
-  let merged = raw;
-  if (typeof raw.preset === 'string') {
+  // Jest usually runs per package from a workspace script, so shared configs
+  // may read the package directory from process.cwd(). Mirror that here.
+  const { rootDir, merged } = await inDirectory(dirname(configFile), async () => {
+    const raw = await evaluator.loadConfig(configFile);
+    const rootDir = resolve(dirname(configFile), typeof raw.rootDir === 'string' ? raw.rootDir : '.');
+    const deps = evaluator.dependenciesOf(configFile);
+    for (const file of deps.files) configModules.add(file);
+    for (const name of deps.packages) configPackages.add(name);
+    if (typeof raw.preset !== 'string') return { rootDir, merged: raw };
+
     const preset = loadPreset(raw.preset, rootDir, evaluator);
     if (preset.file) {
-      const deps = evaluator.dependenciesOf(preset.file);
-      for (const file of deps.files) configModules.add(file);
-      for (const name of deps.packages) configPackages.add(name);
+      const presetDeps = evaluator.dependenciesOf(preset.file);
+      for (const file of presetDeps.files) configModules.add(file);
+      for (const name of presetDeps.packages) configPackages.add(name);
     }
     if (preset.packageName) configPackages.add(preset.packageName);
-    merged = mergePreset(preset.config, raw);
-  }
+    return { rootDir, merged: mergePreset(preset.config, raw) };
+  });
 
   const ref = (value: string) => trackReference(value, rootDir, runtimeInputs, configPackages);
 
@@ -108,6 +116,16 @@ export async function loadJestProjectConfig(
   };
 }
 
+async function inDirectory<T>(dir: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.cwd();
+  process.chdir(dir);
+  try {
+    return await run();
+  } finally {
+    process.chdir(previous);
+  }
+}
+
 function loadPreset(
   preset: string,
   rootDir: string,
@@ -122,7 +140,12 @@ function loadPreset(
   }
   const name = packageName(presetPath);
   const request = /\.(json|[mc]?js)$/.test(presetPath) ? presetPath : `${presetPath}/jest-preset`;
-  const value = evaluator.requirePackage(request, resolve(rootDir, 'jest.config.js'));
+  const fromFile = resolve(rootDir, 'jest.config.js');
+  const workspaceFile = evaluator.workspaceModule(request, fromFile);
+  if (workspaceFile) {
+    return { config: asConfig(interopDefault(evaluator.loadModule(workspaceFile))), file: workspaceFile, packageName: name };
+  }
+  const value = evaluator.requirePackage(request, fromFile);
   return { config: asConfig(interopDefault(value)), packageName: name };
 }
 

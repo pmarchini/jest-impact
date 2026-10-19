@@ -1,16 +1,18 @@
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
-import { dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, resolve, sep } from 'node:path';
 import vm from 'node:vm';
 import { transform } from 'sucrase';
 
 /**
  * Evaluates Jest config files without requiring the workspace to be installed.
  *
- * Local files (the config, presets it points at, helpers it requires) are
- * transpiled with sucrase and run in-process. Bare packages are required for
- * real when they are installed; otherwise a stub stands in and the package
- * name is recorded, so the caller knows the config may be incomplete.
+ * Local files (the config, presets it points at, helpers it requires, and
+ * workspace packages they import) are transpiled with sucrase and run
+ * in-process, fresh for each config, so code that reads process.cwd() sees the
+ * directory of the config being loaded. Installed packages are required for
+ * real; otherwise a stub stands in and the package name is recorded, so the
+ * caller knows the config may be incomplete.
  */
 export class ConfigEvaluator {
   readonly missingPackages = new Set<string>();
@@ -29,6 +31,8 @@ export class ConfigEvaluator {
     if (file.endsWith('.json')) {
       return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
     }
+    // A shared module can compute its exports from process.cwd(), so another config's copy is stale.
+    this.cache.clear();
     let value = this.loadModule(file);
     value = interopDefault(value);
     if (typeof value === 'function') {
@@ -56,6 +60,22 @@ export class ConfigEvaluator {
       this.missingPackages.add(packageName(specifier));
       return missingModuleStub();
     }
+  }
+
+  /**
+   * The file a bare specifier names when it is a workspace package rather than
+   * an installed one: it resolves, through a symlink or not, outside node_modules.
+   */
+  workspaceModule(specifier: string, fromFile: string): string | undefined {
+    if (isBuiltin(specifier)) return undefined;
+    let file: string;
+    try {
+      file = realpathSync(createRequire(fromFile).resolve(specifier));
+    } catch {
+      return undefined;
+    }
+    if (file.split(sep).includes('node_modules')) return undefined;
+    return LOCAL_EXTENSIONS.includes(extname(file)) ? file : undefined;
   }
 
   /** Every local file and package a config file pulled in, directly or through other local files. */
@@ -97,6 +117,11 @@ export class ConfigEvaluator {
           locals.add(target);
           return this.loadModule(target);
         }
+      }
+      const workspaceFile = this.workspaceModule(specifier, file);
+      if (workspaceFile) {
+        locals.add(workspaceFile);
+        return this.loadModule(workspaceFile);
       }
       if (!isBuiltin(specifier)) packages.add(packageName(specifier));
       return this.requirePackage(specifier, file);
