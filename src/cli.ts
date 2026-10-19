@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { analyze } from './analyze.ts';
 import { repoRoot } from './git.ts';
-import { formatNxCommands, formatText, writeTestLists } from './output.ts';
+import { formatGitlabPipeline, formatNxCommands, formatText, writeTestLists } from './output.ts';
 
 const HELP = `Usage: jest-impact [options]
 
@@ -15,7 +15,9 @@ Options:
   --base <ref>        Base commit (default: $NX_BASE or main)
   --head <ref>        Head commit (default: $NX_HEAD or HEAD)
   --cwd <dir>         Workspace root (default: the git repository containing the current directory)
-  --format <format>   text, json or nx (default: text)
+  --format <format>   text, json, nx or gitlab (default: text)
+  --gitlab-include <file>  With --format gitlab: a local file the child pipeline includes (repeatable)
+  --gitlab-extends <job>   With --format gitlab: a hidden job every generated job extends
   --json <file>       Also write the full JSON report to <file>
   --out-dir <dir>     Write one test list per project to <dir>
   --nx-graph <file>   Project graph from \`nx graph --file\`, for exact project names
@@ -33,6 +35,8 @@ async function main(): Promise<number> {
       json: { type: 'string' },
       'out-dir': { type: 'string' },
       'nx-graph': { type: 'string' },
+      'gitlab-include': { type: 'string', multiple: true },
+      'gitlab-extends': { type: 'string' },
       'no-link': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -56,7 +60,9 @@ async function main(): Promise<number> {
       ? JSON.stringify(report, null, 2)
       : values.format === 'nx'
         ? formatNxCommands(report, workspaceRoot)
-        : formatText(report);
+        : values.format === 'gitlab'
+          ? formatGitlabPipeline(report, { include: values['gitlab-include'], extends: values['gitlab-extends'] })
+          : formatText(report);
   if (output) process.stdout.write(output + '\n');
   return 0;
 }

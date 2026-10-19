@@ -23,6 +23,30 @@ npx nx run cart:test        # the whole target, when the run had to widen
 
 `--runTestsByPath` is required: Jest treats plain paths as regexes, and paths such as `+state/` silently match nothing.
 
+`--format gitlab` prints a child pipeline with one job per project that needs to run (or a single no-op job when none does), for GitLab's dynamic child pipelines:
+
+```yaml
+plan-tests:
+  stage: plan
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - npx jest-impact --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head "$CI_COMMIT_SHA" --format gitlab --gitlab-include ci/jest-job.yml --gitlab-extends .jest > tests.yml
+  artifacts:
+    paths: [tests.yml]
+
+run-tests:
+  stage: test
+  needs: [plan-tests]
+  trigger:
+    include:
+      - artifact: tests.yml
+        job: plan-tests
+    strategy: depend
+```
+
+`--gitlab-include` adds `include: local` entries to the child pipeline, and `--gitlab-extends` makes every job extend a hidden job from them, for image, cache and tags.
+
 The Node API is `analyze({ workspaceRoot, base, head })`, which returns the same report as `--json`.
 
 ## What happens in one run
