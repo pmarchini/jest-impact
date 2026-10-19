@@ -2,9 +2,17 @@
 
 Lists the Jest test files in each Nx project that the changes between two commits can affect, so CI can run only those. [sovra](https://github.com/oblador/sovra) walks the import graph; this package prepares its inputs and decides when to widen the run.
 
+jest-impact is an independent project for use with Jest. It is not affiliated with or endorsed by the Jest project or the OpenJS Foundation.
+
 Anything the analyzer cannot reason about runs. A false negative (a skipped test that should have run) is the one failure it is designed to avoid.
 
 ## Usage
+
+```sh
+npm install --save-dev jest-impact
+```
+
+Needs Node 22.18 or later. sovra ships prebuilt binaries for Linux (x64 and arm64, glibc and musl), macOS on Apple silicon and Windows (x64 and arm64); Intel Macs are not covered.
 
 Run it in a checkout of the head commit, with git history back to the base.
 
@@ -122,3 +130,16 @@ npm test          # node:test, runs the TypeScript sources directly (Node 22.18+
 npm run typecheck
 npm run build     # emits dist/ for the bin
 ```
+
+## Publishing
+
+Releases publish from GitHub Actions (`.github/workflows/release.yml`) when a `v*` tag is pushed:
+
+```sh
+npm version patch         # or minor / major: bumps package.json, commits and tags
+git push --follow-tags    # the Release workflow tests, builds, publishes and creates a GitHub release
+```
+
+The workflow uses npm trusted publishing, so no npm token is stored in the repo. It is set up once on npmjs.com under the package's Settings > Trusted publishing: GitHub Actions, owner `pmarchini`, repository `jest-impact`, workflow `release.yml`, environment `npm`. npm only offers this for a package that already exists, so the first version is published by hand with `npm publish`.
+
+`npm pack` writes the tarball without publishing, to try it locally with `npm install ./jest-impact-<version>.tgz`.
