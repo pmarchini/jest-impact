@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extname, join, posix, relative, resolve } from 'node:path';
 import micromatch from 'micromatch';
@@ -10,7 +11,7 @@ import { loadJestProjectConfig, type JestProjectConfig } from './jest/project-co
 import { selectTestFiles } from './jest/test-files.ts';
 import { findDynamicImports } from './dynamic-imports.ts';
 import { discoverProjects, findJestTargets, owningProject, type JestTarget, type NxProject } from './nx/projects.ts';
-import { buildResolverOptions } from './resolver-options.ts';
+import { buildResolverOptions, parseJsonc } from './resolver-options.ts';
 import { loadSettings, type Settings } from './settings.ts';
 import { parseSovraError, triage, type TriagedError } from './triage.ts';
 import { linkWorkspacePackages, workspacePackages, type LinkResult } from './workspace-linker.ts';
@@ -94,6 +95,14 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
   const configs = targets.flatMap((t) => (t.config ? [t.config] : []));
   const resolver = buildResolverOptions(root, configs, settings.conditionNames);
   warnings.push(...resolver.warnings);
+  // sovra cannot apply these mappings, so it follows the import to the real module. The
+  // mapped file is loaded in that project instead: it widens the project like a setup file.
+  for (const config of configs) {
+    const unmapped = new Set((resolver.unmappedPatterns.get(config.configFile) ?? []).map((re) => re.source));
+    for (const { pattern, file } of config.mapperTargets) {
+      if (unmapped.has(new RegExp(pattern).source) && !config.runtimeInputs.includes(file)) config.runtimeInputs.push(file);
+    }
+  }
 
   const manifestPaths = ['package.json', ...packages.map((p) => `${p.dir}/package.json`)];
   const changes = options.changeSet ?? collectChanges(root, base, head, manifestPaths);
@@ -281,6 +290,14 @@ function applyFileRules(
     }
     if (project && PROJECT_CONFIG_FILES.some((glob) => micromatch.isMatch(base, glob, { dot: true }))) {
       for (const target of targetsOf(project)) target.forced.push({ rule: 'project-config', detail: 'project config file changed', file: path });
+      if (base.startsWith('tsconfig')) {
+        // Another project's tsconfig can extend this one.
+        for (const extender of tsconfigExtenders(root, files, path)) {
+          for (const target of targetsOf(owningProject(extender, projects))) {
+            if (target.project !== project) target.forced.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
+          }
+        }
+      }
       continue;
     }
     if (path.split('/').includes('__mocks__')) {
@@ -324,6 +341,36 @@ function widenProject(
   for (const f of files) {
     if (f.startsWith(prefix) && CODE_EXTENSIONS.has(extname(f))) sovraChanges.add(f);
   }
+}
+
+/** Every tracked tsconfig that extends `changed`, directly or through other tsconfigs. */
+function tsconfigExtenders(root: string, files: string[], changed: string): string[] {
+  const extendedBy = new Map<string, string[]>();
+  for (const file of files) {
+    if (!/(^|\/)tsconfig[^/]*\.json$/.test(file) || file.includes('node_modules/')) continue;
+    let json: any;
+    try {
+      json = parseJsonc(readFileSync(join(root, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    for (const spec of [json?.extends ?? []].flat()) {
+      if (typeof spec !== 'string' || !spec.startsWith('.')) continue;
+      const target = posix.normalize(posix.join(posix.dirname(file), spec.endsWith('.json') ? spec : `${spec}.json`));
+      extendedBy.set(target, [...(extendedBy.get(target) ?? []), file]);
+    }
+  }
+  const found = new Set<string>();
+  const queue = [changed];
+  while (queue.length > 0) {
+    for (const extender of extendedBy.get(queue.pop()!) ?? []) {
+      if (!found.has(extender)) {
+        found.add(extender);
+        queue.push(extender);
+      }
+    }
+  }
+  return [...found];
 }
 
 /** Files listed in nx.json's sharedGlobals input, which Nx itself treats as affecting every project. */

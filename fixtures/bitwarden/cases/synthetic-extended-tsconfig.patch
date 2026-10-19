@@ -1,0 +1,13 @@
+diff --git a/apps/web/tsconfig.json b/apps/web/tsconfig.json
+index 6bfa9c8703..ad9839efd6 100644
+--- a/apps/web/tsconfig.json
++++ b/apps/web/tsconfig.json
+@@ -1,7 +1,7 @@
+ {
+   "extends": "../../tsconfig.base",
+   "angularCompilerOptions": {
+-    "strictTemplates": true
++    "strictTemplates": false
+   },
+   "files": ["src/polyfills.ts", "src/main.ts", "src/theme.ts"],
+   "include": [

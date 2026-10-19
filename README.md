@@ -74,8 +74,9 @@ The Node API is `analyze({ workspaceRoot, base, head })`, which returns the same
 | Root `package.json` changed beyond dependency ranges and metadata | Run everything |
 | Lockfile changed and cannot be parsed | Run everything |
 | A test-tooling package changed (`jest`, `ts-jest`, `@nx/jest`, `typescript`, ...) | Run everything |
-| A project's Jest config, preset, config helper, `tsconfig*.json`, `project.json` or `.babelrc` changed | Run that project |
+| A project's Jest config, preset, config helper, `tsconfig*.json`, `project.json` or `.babelrc` changed | Run that project, and every project whose tsconfig extends the changed one |
 | A setup file, transform, environment or other runtime input imports a change | Run that project |
+| A file a `moduleNameMapper` entry points at (or its imports) changed, and sovra cannot apply that mapping | Run each project with that mapping |
 | A package the Jest config loads changed (transform, environment, preset) | Run that project |
 | The config needs a package that is not installed, or uses a custom resolver not in `safeResolvers` | Run that project, on every run |
 | A `__mocks__` file changed | Run that project |
@@ -111,7 +112,7 @@ Optional `jest-impact.config.json` at the workspace root. Each list given replac
 - **nx-examples, test lists:** identical to `jest --listTests` for all 9 Jest projects, with and without `node_modules` installed.
 - **nx-examples, impact:** each of the 15 test files was run alone under a file-read tracer to record what Jest actually loads. For 172 single-file changes, no test that loaded the changed file was missed. With codegen output present, 96 changes matched the runtime set exactly; the rest over-selected (type-only imports that ts-jest elides, and project-wide widenings for config files). Without codegen output, the unresolved `./generated` import in `shared-product-types` widens every run to the 10 tests that reach it, which is the safety net working as intended.
 - **Replays:** 60 nx-examples commits and 40 nrwl/nx commits. Almost all of them run everything, correctly: they are Nx/Jest upgrades, or (in nrwl/nx) the remaining Jest suites are e2e tests whose global setup imports the Nx packages themselves. nrwl/nx also shows the cost of dynamic requires in tooling code. Analysis took 0.3 to 0.6 s per commit, or about 5 s when the pnpm lockfile changed.
-- **bitwarden/clients fixture** (`fixtures/bitwarden`): 1,481 test files traced in one full Jest run, and 55 cases (37 real commits by category, 18 synthetic patches). All 55 pass with no missed test. Outside the 8 that correctly run everything, the analyzer selects 27.5% of tests on average where 16.4% loaded a changed file; 31 tests reach files sovra cannot follow and run on every change. About 0.9 s per case.
+- **bitwarden/clients fixture** (`fixtures/bitwarden`): 1,481 test files traced in one full Jest run, and 55 cases (37 real commits by category, 18 synthetic patches). All of them pass with no missed test. A sweep that changes each of the 6,572 files the suite loads, one at a time, found 3 more misses (a tsconfig extended from another project, and a mapped module); both are fixed and now have cases. Outside the 8 that correctly run everything, the analyzer selects 27.5% of tests on average where 16.4% loaded a changed file; 31 tests reach files sovra cannot follow and run on every change. About 0.9 s per case.
 - **Nx output:** `nx run <project>:test --runTestsByPath <file>` ran exactly the listed suite through the inferred `@nx/jest/plugin` target.
 
 ## Known gaps

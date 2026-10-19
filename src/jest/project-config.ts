@@ -20,6 +20,8 @@ export type JestProjectConfig = {
   configModules: string[];
   /** Local files Jest loads around every test, such as setup files and transforms. */
   runtimeInputs: string[];
+  /** Local files that moduleNameMapper entries point at, by pattern. */
+  mapperTargets: Array<{ pattern: string; file: string }>;
   /** Packages the config loads: transforms, environments, presets, serializers. */
   configPackages: string[];
   /** testEnvironmentOptions.customExportConditions, which Jest adds when resolving exports. */
@@ -76,6 +78,13 @@ export async function loadJestProjectConfig(
       (Array.isArray(target) ? target : [target]).map((t) => normalizeTarget(replaceRootDir(String(t), rootDir))),
     ],
   );
+  const mapperTargets = moduleNameMapper.flatMap(([pattern, targets]) =>
+    targets.flatMap((target) => {
+      const file = !target.includes('$') && isAbsolute(target) ? resolveLocal(target) : undefined;
+      return file ? [{ pattern, file }] : [];
+    }),
+  );
+
   const testRegex = merged.testRegex;
   return {
     configFile,
@@ -91,6 +100,7 @@ export async function loadJestProjectConfig(
     modulePaths: stringArray(merged.modulePaths).map((p) => resolve(rootDir, replaceRootDir(p, rootDir))),
     moduleDirectories: stringArray(merged.moduleDirectories ?? ['node_modules']),
     configModules: [...configModules],
+    mapperTargets,
     runtimeInputs: [...runtimeInputs],
     configPackages: [...configPackages],
     exportConditions: stringArray(objectOf(merged.testEnvironmentOptions).customExportConditions),

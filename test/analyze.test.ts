@@ -157,6 +157,17 @@ describe('analyze', () => {
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/version.spec.ts'] });
   });
 
+  it('runs projects whose tsconfig extends a changed tsconfig in another project', async () => {
+    await analyzeChange({
+      'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true } }),
+      'libs/ui/tsconfig.json': JSON.stringify({ extends: '../utils/tsconfig.json' }),
+    });
+    write({ 'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: false } }) });
+    git('commit', '-q', '-am', 'loosen utils');
+    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    assert.deepEqual(selected(report), { utils: 'all', ui: 'all' });
+  });
+
   it('always runs tests that reach a dynamic require, even when nothing they import changed', async () => {
     await analyzeChange({ 'libs/ui/src/label.ts': "export const label = require(process.env.LABEL ?? './x');\n" });
     const report = await analyze({ workspaceRoot: root, base: 'HEAD', head: 'HEAD' });

@@ -1,0 +1,9 @@
+diff --git a/libs/common/spec/jest-sdk-client-factory.ts b/libs/common/spec/jest-sdk-client-factory.ts
+index 8b93ba791b..cf299fa8c9 100644
+--- a/libs/common/spec/jest-sdk-client-factory.ts
++++ b/libs/common/spec/jest-sdk-client-factory.ts
+@@ -9,3 +9,4 @@ export class DefaultSdkClientFactory implements SdkClientFactory {
+     throw new Error("Method not implemented.");
+   }
+ }
++// touched by jest-impact case

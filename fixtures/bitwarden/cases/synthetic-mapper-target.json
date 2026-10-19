@@ -1,0 +1,14 @@
+{
+  "name": "synthetic-mapper-target",
+  "category": "synthetic",
+  "description": "Edit a file that some Jest configs map a module to with a moduleNameMapper sovra cannot apply",
+  "patch": "synthetic-mapper-target.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "apps/web/jest.config.js",
+      "apps/cli/jest.config.js",
+      "bitwarden_license/bit-cli/jest.config.js"
+    ]
+  }
+}

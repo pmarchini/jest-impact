@@ -1,0 +1,13 @@
+{
+  "name": "synthetic-extended-tsconfig",
+  "category": "synthetic",
+  "description": "Edit apps/web/tsconfig.json, which bitwarden_license/bit-web/tsconfig.json extends",
+  "patch": "synthetic-extended-tsconfig.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "apps/web/jest.config.js",
+      "bitwarden_license/bit-web/jest.config.js"
+    ]
+  }
+}
