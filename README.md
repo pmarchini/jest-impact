@@ -6,6 +6,12 @@ Anything the analyzer cannot reason about runs. A false negative (a skipped test
 
 ## Usage
 
+```sh
+npm install --save-dev jest-impact
+```
+
+Needs Node 22.18 or later. sovra ships prebuilt binaries for Linux (x64 and arm64, glibc and musl), macOS on Apple silicon and Windows (x64 and arm64); Intel Macs are not covered.
+
 Run it in a checkout of the head commit, with git history back to the base.
 
 ```sh
@@ -98,3 +104,13 @@ npm test          # node:test, runs the TypeScript sources directly (Node 22.18+
 npm run typecheck
 npm run build     # emits dist/ for the bin
 ```
+
+## Publishing
+
+```sh
+npm version patch         # or minor / major: bumps package.json, commits and tags
+npm publish               # typechecks, tests and builds first (prepublishOnly, prepack)
+git push --follow-tags
+```
+
+`npm pack` writes the tarball without publishing, to try it locally with `npm install ./jest-impact-<version>.tgz`.
