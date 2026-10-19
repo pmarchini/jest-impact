@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/bitwarden/clients",
+  "commit": "9e54ce7b43b14685eec31aaae49b1328f1378f8d",
+  "install": "npm ci --ignore-scripts",
+  "trace": "trace.jsonl.gz"
+}

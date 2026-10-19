@@ -7,7 +7,10 @@
     "runAll": false,
     "wholeProjects": [
       "libs/importer/jest.config.js",
-      "libs/guid/jest.config.js"
+      "libs/components/jest.config.js"
+    ],
+    "mustSkip": [
+      "libs/guid/src/guid.spec.ts"
     ]
   }
 }

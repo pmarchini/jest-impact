@@ -18,7 +18,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'test/**/*.test.ts'",
-    "start": "node src/cli.ts"
+    "start": "node src/cli.ts",
+    "cases:bitwarden": "fixtures/bitwarden/setup.sh && node validation/run-cases.mjs fixtures/bitwarden .cache/bitwarden"
   },
   "dependencies": {
     "@yarnpkg/lockfile": "1.1.0",

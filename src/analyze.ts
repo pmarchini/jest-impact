@@ -8,6 +8,7 @@ import { ConfigEvaluator } from './jest/evaluate.ts';
 import { CONFIG_FALLBACKS } from './jest/nx-preset.ts';
 import { loadJestProjectConfig, type JestProjectConfig } from './jest/project-config.ts';
 import { selectTestFiles } from './jest/test-files.ts';
+import { findDynamicImports } from './dynamic-imports.ts';
 import { discoverProjects, findJestTargets, owningProject, type JestTarget, type NxProject } from './nx/projects.ts';
 import { buildResolverOptions } from './resolver-options.ts';
 import { loadSettings, type Settings } from './settings.ts';
@@ -141,7 +142,16 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       report.ignoredErrors = triaged.filter((t) => t.verdict === 'ignore').length;
       const global = triaged.find((t) => t.verdict === 'global');
       if (global) report.runAll.push({ rule: 'sovra-error', detail: global.reason });
-      report.uncertainFiles = groupUncertain(triaged).filter((u) => !micromatch.isMatch(u.file, settings.trustedFiles));
+      const dynamicImports = findDynamicImports(root).map((file): TriagedError => ({
+        kind: 'dynamic',
+        file,
+        line: 0,
+        message: 'import() with a non-literal argument',
+        code: '',
+        verdict: 'uncertain',
+        reason: 'import() with a non-literal argument',
+      }));
+      report.uncertainFiles = groupUncertain([...triaged, ...dynamicImports]).filter((u) => !micromatch.isMatch(u.file, settings.trustedFiles));
 
       let affected = changeList.length > 0 ? first.files : [];
       if (report.uncertainFiles.length > 0) {
@@ -252,6 +262,8 @@ function applyFileRules(
     const owners = configInputOwners.get(path);
     if (owners) {
       for (const target of owners) target.forced.push({ rule: 'config-input', detail: 'Jest config or setup file changed', file: path });
+      // The same file can also be imported by tests, in this project or another.
+      if (CODE_EXTENSIONS.has(extname(path))) sovraChanges.add(path);
       continue;
     }
     if (micromatch.isMatch(path, settings.ignoredFiles, { dot: true })) {

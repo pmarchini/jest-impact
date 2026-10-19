@@ -29,7 +29,8 @@ function packageOf(file) {
 function record(file) {
   if (!current || typeof file !== 'string' || !file.startsWith(root)) return;
   if (file.includes('/node_modules/')) {
-    if (!CODE.test(file)) current.packages.add(packageOf(file));
+    // Manifests are read by resolvers and by ts-jest's type checker; code shows up as modules instead.
+    if (!CODE.test(file) && path.basename(file) !== 'package.json') current.packages.add(packageOf(file));
     return;
   }
   const rel = file.slice(root.length);

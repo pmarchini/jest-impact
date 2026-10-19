@@ -1,11 +1,14 @@
-// Runs the fixture cases against a Jest read trace taken at the snapshot commit.
+// Runs a fixture's cases against the Jest trace recorded at its pinned commit.
 //
-//   node validation/run-cases.mjs <workspace> <trace-dir> <cases-dir> [out.json] [name-filter]
+//   node validation/run-cases.mjs <fixture-dir> <workspace> [out.json] [name-filter]
 //
-// A case is `<name>.json` in the cases dir:
+// <fixture-dir> holds fixture.json (the pinned commit), the gzipped trace and
+// cases/. <workspace> is a checkout of that commit, from the fixture's setup.sh.
+//
+// A case is `<name>.json` in cases/:
 //   { "name", "category", "description",
 //     "commit": "<sha>"          // a real commit, replayed onto the snapshot, or
-//     "patch": "<file.patch>",   // a hand-written change, applied to the snapshot checkout
+//     "patch": "<file.patch>",   // a hand-written change, committed on the snapshot and reset afterwards
 //     "expect": { "runAll"?: bool, "wholeProjects"?: [config files], "mustSelect"?: [tests],
 //                 "mustSkip"?: [tests], "uncertain"?: [files], "maxAboveFloor"?: n } }
 //
@@ -22,7 +25,8 @@
 // a miss, and so is any expectation the case states that does not hold.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 
 const src = new URL('../src/', import.meta.url);
 const { analyze } = await import(new URL('analyze.ts', src));
@@ -30,17 +34,19 @@ const { collectChanges } = await import(new URL('changes.ts', src));
 const { workspacePackages } = await import(new URL('workspace-linker.ts', src));
 const { trackedFiles } = await import(new URL('git.ts', src));
 
-const [workspace, traceDir, casesDir, outFile, filter] = process.argv.slice(2);
+const [fixtureDir, workspace, outFile, filter] = process.argv.slice(2);
+const fixture = JSON.parse(readFileSync(join(fixtureDir, 'fixture.json'), 'utf8'));
+const casesDir = join(fixtureDir, 'cases');
 const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 
 const traces = new Map();
-for (const name of readdirSync(traceDir).filter((n) => n.endsWith('.jsonl'))) {
-  for (const line of readFileSync(join(traceDir, name), 'utf8').split('\n').filter(Boolean)) {
-    const { test, files, packages } = JSON.parse(line);
-    traces.set(test, { files: new Set(files), packages: new Set(packages) });
-  }
+const traceFile = join(fixtureDir, fixture.trace);
+const traceText = traceFile.endsWith('.gz') ? gunzipSync(readFileSync(traceFile)).toString('utf8') : readFileSync(traceFile, 'utf8');
+for (const line of traceText.split('\n').filter(Boolean)) {
+  const { test, files, packages } = JSON.parse(line);
+  traces.set(test, { files: new Set(files), packages: new Set(packages) });
 }
-const snapshot = readFileSync(join(traceDir, 'COMMIT'), 'utf8').trim();
+const snapshot = fixture.commit;
 if (git('rev-parse', 'HEAD') !== snapshot) throw new Error(`checkout ${snapshot} first`);
 if (git('status', '--porcelain', '--untracked-files=no')) throw new Error('the fixture checkout has local changes');
 
@@ -67,18 +73,20 @@ for (const c of cases) {
       .map((f) => ({ path: f.path, status: 'modified' }));
     changeSet = { ...full, files };
   } else {
-    patchFile = join(casesDir, c.patch);
-    // --index, so added files are tracked and the analyzer sees them.
+    // The patch is committed on a detached HEAD, so the analyzer diffs it exactly as CI would.
+    patchFile = resolve(casesDir, c.patch);
     git('apply', '--index', patchFile);
-    const files = git('apply', '--numstat', '--summary', patchFile);
-    changeSet = { files: patchStatuses(files), manifests: [], npmPackages: [] };
+    git('-c', 'user.name=jest-impact', '-c', 'user.email=cases@jest-impact', 'commit', '-q', '--no-verify', '-m', c.name);
   }
 
   let report;
   try {
-    report = await analyze({ workspaceRoot: workspace, base: snapshot, head: snapshot, changeSet });
+    report = changeSet
+      ? await analyze({ workspaceRoot: workspace, base: snapshot, head: snapshot, changeSet })
+      : await analyze({ workspaceRoot: workspace, base: snapshot, head: 'HEAD' });
+    changeSet ??= collectChanges(workspace, snapshot, 'HEAD', manifestPaths);
   } finally {
-    if (patchFile) git('apply', '-R', '--index', patchFile);
+    if (patchFile) git('reset', '-q', '--hard', snapshot);
   }
 
   const changed = new Set(changeSet.files.map((f) => f.path));
@@ -136,13 +144,3 @@ function checkExpect(expect, report, selected, floor) {
   return out;
 }
 
-function patchStatuses(summary) {
-  const files = new Map();
-  for (const line of summary.split('\n').filter(Boolean)) {
-    const numstat = /^\S+\t\S+\t(.+)$/.exec(line);
-    if (numstat) files.set(numstat[1], 'modified');
-    const mode = /^ (create|delete) mode \d+ (.+)$/.exec(line);
-    if (mode) files.set(mode[2], mode[1] === 'create' ? 'added' : 'deleted');
-  }
-  return [...files].map(([path, status]) => ({ path, status }));
-}

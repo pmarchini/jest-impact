@@ -18,7 +18,7 @@ export type JestProjectConfig = {
   moduleDirectories: string[];
   /** Local files evaluated to build the config: the config itself, its preset and helpers. */
   configModules: string[];
-  /** Local files Jest loads around every test, such as setup files, transforms and mapper targets. */
+  /** Local files Jest loads around every test, such as setup files and transforms. */
   runtimeInputs: string[];
   /** Packages the config loads: transforms, environments, presets, serializers. */
   configPackages: string[];
@@ -76,15 +76,6 @@ export async function loadJestProjectConfig(
       (Array.isArray(target) ? target : [target]).map((t) => normalizeTarget(replaceRootDir(String(t), rootDir))),
     ],
   );
-  // Mapper targets are reached through the import graph when sovra can express the
-  // mapping; a direct edit to one still widens the project in case it cannot.
-  for (const [, targets] of moduleNameMapper) {
-    for (const target of targets) {
-      const file = !target.includes('$') && isAbsolute(target) ? resolveLocal(target) : undefined;
-      if (file) configModules.add(file);
-    }
-  }
-
   const testRegex = merged.testRegex;
   return {
     configFile,
