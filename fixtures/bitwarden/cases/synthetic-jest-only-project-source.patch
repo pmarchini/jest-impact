@@ -1,0 +1,9 @@
+diff --git a/bitwarden_license/bit-common/src/dirt/reports/risk-insights/helpers/type-guards/basic-type-guards.ts b/bitwarden_license/bit-common/src/dirt/reports/risk-insights/helpers/type-guards/basic-type-guards.ts
+index 18bd76b42c..5b36c341f2 100644
+--- a/bitwarden_license/bit-common/src/dirt/reports/risk-insights/helpers/type-guards/basic-type-guards.ts
++++ b/bitwarden_license/bit-common/src/dirt/reports/risk-insights/helpers/type-guards/basic-type-guards.ts
+@@ -362,3 +362,4 @@ export function createBoundedRecordGuard<T>(
+   };
+   return guard;
+ }
++// touched by jest-impact case

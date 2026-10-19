@@ -1,0 +1,9 @@
+diff --git a/libs/guid/src/index.ts b/libs/guid/src/index.ts
+index 3ef62725eb..bad4aaa464 100644
+--- a/libs/guid/src/index.ts
++++ b/libs/guid/src/index.ts
+@@ -11,3 +11,4 @@ export function newGuid(): string {
+ export function isGuid(id: string): boolean {
+   return guidRegex.test(id);
+ }
++// touched by jest-impact case

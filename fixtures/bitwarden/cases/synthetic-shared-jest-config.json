@@ -1,0 +1,13 @@
+{
+  "name": "synthetic-shared-jest-config",
+  "category": "synthetic",
+  "description": "Edit libs/shared/jest.config.angular.js, which most project configs spread",
+  "patch": "synthetic-shared-jest-config.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "libs/importer/jest.config.js",
+      "libs/guid/jest.config.js"
+    ]
+  }
+}

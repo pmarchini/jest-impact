@@ -1,0 +1,7 @@
+{
+  "name": "snapshot-1",
+  "category": "snapshot",
+  "description": "[deps] Platform: Update jest-environment-jsdom to v30 (#20845)",
+  "commit": "198d5e7e3a75511e49b16d1fdda685a16d7c7175",
+  "expect": {}
+}

@@ -1,0 +1,7 @@
+{
+  "name": "app-only-source-2",
+  "category": "app-only-source",
+  "description": "[PM-44200] fix: Check clone passkey warning on decrypted cipher (#23547)",
+  "commit": "95040c39dff64fb4f0846456599da9948116240b",
+  "expect": {}
+}

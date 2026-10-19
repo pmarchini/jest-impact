@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-setup-file",
+  "category": "synthetic",
+  "description": "Edit the setupFilesAfterEnv file of libs/importer",
+  "patch": "synthetic-setup-file.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "libs/importer/jest.config.js"
+    ]
+  }
+}

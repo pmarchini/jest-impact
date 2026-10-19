@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-jest-only-project-source",
+  "category": "synthetic",
+  "description": "Edit source in bitwarden_license/bit-common, a Jest project with no Nx project",
+  "patch": "synthetic-jest-only-project-source.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "bitwarden_license/bit-common/src/dirt/reports/risk-insights/helpers/type-guards/basic-type-guards.spec.ts"
+    ]
+  }
+}

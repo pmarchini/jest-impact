@@ -1,0 +1,13 @@
+{
+  "name": "synthetic-new-spec",
+  "category": "synthetic",
+  "description": "Add a new spec file to libs/guid",
+  "patch": "synthetic-new-spec.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "libs/guid/src/guid-extra.spec.ts"
+    ],
+    "maxAboveFloor": 1
+  }
+}

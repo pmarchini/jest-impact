@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-root-tsconfig",
+  "category": "synthetic",
+  "description": "Edit tsconfig.base.json",
+  "patch": "synthetic-root-tsconfig.patch",
+  "expect": {
+    "runAll": true
+  }
+}

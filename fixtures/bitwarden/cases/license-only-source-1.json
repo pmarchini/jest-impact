@@ -1,0 +1,7 @@
+{
+  "name": "license-only-source-1",
+  "category": "license-only-source",
+  "description": "[PM-43891] refactor: Migrate provider AccountComponent and VerifyRecoverDeleteProviderComponent to standalone (#23834)",
+  "commit": "ab3626237247009d62e2bd099c515cfcdfa152c9",
+  "expect": {}
+}

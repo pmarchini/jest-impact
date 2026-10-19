@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-project-tsconfig",
+  "category": "synthetic",
+  "description": "Edit libs/guid/tsconfig.spec.json",
+  "patch": "synthetic-project-tsconfig.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "libs/guid/jest.config.js"
+    ]
+  }
+}

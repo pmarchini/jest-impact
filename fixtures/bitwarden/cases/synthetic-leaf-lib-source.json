@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-leaf-lib-source",
+  "category": "synthetic",
+  "description": "Edit the only source file of a small lib (libs/guid) that many projects import",
+  "patch": "synthetic-leaf-lib-source.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "libs/guid/src/guid.spec.ts"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "license-only-source-2",
+  "category": "license-only-source",
+  "description": "[PM-43890] refactor: Migrate provider setup components to standalone (#23801)",
+  "commit": "54870a445e7154c661fcc19a14411d82787ff6ab",
+  "expect": {}
+}

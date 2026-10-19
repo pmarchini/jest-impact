@@ -1,0 +1,7 @@
+{
+  "name": "snapshot-2",
+  "category": "snapshot",
+  "description": "Auth / PM-41503 & PM-41533 - Registration - Wire new open org invite data into register start and finish (#22333)",
+  "commit": "d1d8e8277eee18a552082dee9bd7ead7b6f29492",
+  "expect": {}
+}

@@ -1,0 +1,7 @@
+{
+  "name": "docs-only-1",
+  "category": "docs-only",
+  "description": "llm: Add SafeInjectionToken typing rule to Angular rules (#23719)",
+  "commit": "8eedf42f2a93ed6502c488962dfebe87b3b58d76",
+  "expect": {}
+}

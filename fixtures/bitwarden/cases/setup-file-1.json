@@ -1,0 +1,7 @@
+{
+  "name": "setup-file-1",
+  "category": "setup-file",
+  "description": "[PM-44246] introduce `tab-lifecycle` module (#23625)",
+  "commit": "3d0d83a6e43020140f1c3ed69306d74230211f23",
+  "expect": {}
+}

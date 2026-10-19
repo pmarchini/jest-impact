@@ -1,0 +1,7 @@
+{
+  "name": "new-test-file-1",
+  "category": "new-test-file",
+  "description": "[PAM-343] PAM leasing: client domain & SDK services (#23962)",
+  "commit": "9e54ce7b43b14685eec31aaae49b1328f1378f8d",
+  "expect": {}
+}

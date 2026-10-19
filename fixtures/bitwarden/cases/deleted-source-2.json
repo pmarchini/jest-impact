@@ -1,0 +1,7 @@
+{
+  "name": "deleted-source-2",
+  "category": "deleted-source",
+  "description": "remove no longer needed models, fields (#23673)",
+  "commit": "a95a18acb81c3c70e6a7d9a330178d2aeadf86a9",
+  "expect": {}
+}

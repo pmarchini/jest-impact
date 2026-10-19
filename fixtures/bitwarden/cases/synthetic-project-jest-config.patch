@@ -1,0 +1,9 @@
+diff --git a/libs/guid/jest.config.js b/libs/guid/jest.config.js
+index d1c4dc0109..3a4dc1ee9d 100644
+--- a/libs/guid/jest.config.js
++++ b/libs/guid/jest.config.js
+@@ -8,3 +8,4 @@ module.exports = {
+   moduleFileExtensions: ["ts", "js", "html"],
+   coverageDirectory: "../../coverage/libs/guid",
+ };
++// touched by jest-impact case

@@ -1,0 +1,7 @@
+{
+  "name": "lockfile-small-1",
+  "category": "lockfile-small",
+  "description": "Update sdk-internal to 0.2.0-main.1126 (#23896)",
+  "commit": "19c6779c9c42278a8471d15d4db10ac4a57b09a9",
+  "expect": {}
+}

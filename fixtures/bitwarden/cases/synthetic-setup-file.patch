@@ -1,0 +1,7 @@
+diff --git a/libs/importer/test.setup.ts b/libs/importer/test.setup.ts
+index 3f9ef28ad0..0aa3b5a01c 100644
+--- a/libs/importer/test.setup.ts
++++ b/libs/importer/test.setup.ts
+@@ -1 +1,2 @@
+ import "@bitwarden/ui-common/setup-jest";
++// touched by jest-impact case

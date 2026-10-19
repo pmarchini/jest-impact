@@ -1,0 +1,7 @@
+{
+  "name": "app-only-source-1",
+  "category": "app-only-source",
+  "description": "[PM-44522] fix: recognize and fill password inputs when type is text (#23722)",
+  "commit": "eaf0adf1830b519332beed5a5d5fcdf22136bbcc",
+  "expect": {}
+}

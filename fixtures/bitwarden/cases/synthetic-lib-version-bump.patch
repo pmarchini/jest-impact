@@ -1,0 +1,12 @@
+diff --git a/libs/guid/package.json b/libs/guid/package.json
+index 4461add637..76add2430e 100644
+--- a/libs/guid/package.json
++++ b/libs/guid/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@bitwarden/guid",
+-  "version": "0.0.1",
++  "version": "0.0.2",
+   "description": "Guid utilities extracted from common",
+   "private": true,
+   "type": "commonjs",

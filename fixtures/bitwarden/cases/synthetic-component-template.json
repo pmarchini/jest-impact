@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-component-template",
+  "category": "synthetic",
+  "description": "Edit an Angular template in libs/components",
+  "patch": "synthetic-component-template.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "libs/components/jest.config.js"
+    ]
+  }
+}

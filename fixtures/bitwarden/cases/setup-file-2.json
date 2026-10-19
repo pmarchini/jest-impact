@@ -1,0 +1,7 @@
+{
+  "name": "setup-file-2",
+  "category": "setup-file",
+  "description": "Feature/webmapper integration (#21738)",
+  "commit": "7ba156142d4bd21ffc1e8f3571219e7f83a018dd",
+  "expect": {}
+}

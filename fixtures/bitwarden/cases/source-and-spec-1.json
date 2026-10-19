@@ -1,0 +1,7 @@
+{
+  "name": "source-and-spec-1",
+  "category": "source-and-spec",
+  "description": "[PM-44496] Fill TOTP instead of username in ambiguous 2FA fields (#23670)",
+  "commit": "abccf1e342dccba06a3cc635cd4c706defa64a32",
+  "expect": {}
+}

@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-core-enum",
+  "category": "synthetic",
+  "description": "Edit a widely imported enum in libs/common",
+  "patch": "synthetic-core-enum.patch",
+  "expect": {
+    "runAll": false
+  }
+}

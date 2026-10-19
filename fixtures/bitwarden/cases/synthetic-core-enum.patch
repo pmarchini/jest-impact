@@ -1,0 +1,9 @@
+diff --git a/libs/common/src/enums/feature-flag.enum.ts b/libs/common/src/enums/feature-flag.enum.ts
+index 32691dea7d..0cc92566c3 100644
+--- a/libs/common/src/enums/feature-flag.enum.ts
++++ b/libs/common/src/enums/feature-flag.enum.ts
+@@ -240,3 +240,4 @@ export function getFeatureFlagValue<Flag extends FeatureFlag>(
+ 
+   return serverConfig.featureStates[flag] as FeatureFlagValueType<Flag>;
+ }
++// touched by jest-impact case

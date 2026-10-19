@@ -1,0 +1,7 @@
+{
+  "name": "non-code-in-project-2",
+  "category": "non-code-in-project",
+  "description": "[CL-1257][CL-1368] feat: Let users customize vault items table columns (#23532)",
+  "commit": "97f20eb978aaaf0d9b47b4c66e35b6e0a60625d5",
+  "expect": {}
+}

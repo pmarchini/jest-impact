@@ -1,0 +1,12 @@
+diff --git a/libs/guid/tsconfig.spec.json b/libs/guid/tsconfig.spec.json
+index 1275f148a1..e39a529a1b 100644
+--- a/libs/guid/tsconfig.spec.json
++++ b/libs/guid/tsconfig.spec.json
+@@ -1,6 +1,7 @@
+ {
+   "extends": "./tsconfig.json",
+   "compilerOptions": {
++    "noUnusedLocals": false,
+     "outDir": "../../dist/out-tsc",
+     "module": "commonjs",
+     "moduleResolution": "node10",

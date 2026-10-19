@@ -1,0 +1,7 @@
+{
+  "name": "large-refactor-1",
+  "category": "large-refactor",
+  "description": "Autosync the updated translations (#23965)",
+  "commit": "0a1fffa185fe6b9e8e3a67244eb227bcff84914b",
+  "expect": {}
+}

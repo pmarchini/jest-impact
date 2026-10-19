@@ -1,0 +1,7 @@
+{
+  "name": "global-config-2",
+  "category": "global-config",
+  "description": "feat(automation-driver): add automation-driver package (#21919)",
+  "commit": "f47203222a7c05a5745da985db4e4c06867e48dc",
+  "expect": {}
+}

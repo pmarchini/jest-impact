@@ -1,0 +1,7 @@
+{
+  "name": "workspace-manifest-2",
+  "category": "workspace-manifest",
+  "description": "macos: Enable macOS autofill extension in Beta channel (#22624)",
+  "commit": "94d9840f74b4e070bdc818939515ee3f31b2d1f4",
+  "expect": {}
+}

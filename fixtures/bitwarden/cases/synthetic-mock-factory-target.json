@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-mock-factory-target",
+  "category": "synthetic",
+  "description": "Edit a module that some tests replace with jest.mock(path, factory)",
+  "patch": "synthetic-mock-factory-target.patch",
+  "expect": {
+    "runAll": false
+  }
+}

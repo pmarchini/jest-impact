@@ -1,0 +1,11 @@
+diff --git a/apps/browser/src/autofill/overlay/inline-menu/pages/button/__snapshots__/autofill-inline-menu-button.spec.ts.snap b/apps/browser/src/autofill/overlay/inline-menu/pages/button/__snapshots__/autofill-inline-menu-button.spec.ts.snap
+index 936fd8b7a2..e3b528504a 100644
+--- a/apps/browser/src/autofill/overlay/inline-menu/pages/button/__snapshots__/autofill-inline-menu-button.spec.ts.snap
++++ b/apps/browser/src/autofill/overlay/inline-menu/pages/button/__snapshots__/autofill-inline-menu-button.spec.ts.snap
+@@ -1,5 +1,6 @@
+ // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+ 
++// touched by jest-impact case
+ exports[`AutofillInlineMenuButton initAutofillInlineMenuButton creates the button element with the locked icon when the user's auth status is not Unlocked 1`] = `
+ <button
+   aria-label="toggleBitwardenVaultOverlay"

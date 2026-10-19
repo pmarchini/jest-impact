@@ -86,6 +86,9 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
   let link: LinkResult | undefined;
   if (options.link !== false) link = linkWorkspacePackages(root, packages);
   const targets = await loadTargets(root, files, absoluteFiles, projects, settings);
+  for (const target of targets) if (target.project.jestOnly) projects.push(target.project);
+  const jestOnly = targets.filter((t) => t.project.jestOnly).map((t) => t.configFile);
+  if (jestOnly.length > 0) warnings.push(`${jestOnly.length} Jest configs belong to no Nx project and are reported as plain Jest runs: ${jestOnly.join(', ')}`);
 
   const configs = targets.flatMap((t) => (t.config ? [t.config] : []));
   const resolver = buildResolverOptions(root, configs, settings.conditionNames);
@@ -106,7 +109,9 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
     timings: { totalMs: 0, sovraMs: 0 },
   };
 
-  report.runAll = globalTriggers(changes, { ...settings, globalFiles: [...settings.globalFiles, ...nxSharedGlobals(root)] });
+  // The root manifest is often in sharedGlobals, but its diff is already read field by field below.
+  const sharedGlobals = nxSharedGlobals(root).filter((f) => f !== 'package.json');
+  report.runAll = globalTriggers(changes, { ...settings, globalFiles: [...settings.globalFiles, ...sharedGlobals] });
   const sovraChanges = new Set<string>();
   if (report.runAll.length === 0) {
     applyFileRules(root, files, changes, targets, projects, settings, sovraChanges, report);
@@ -255,6 +260,8 @@ function applyFileRules(
     }
     const base = posix.basename(path);
     if (base === 'package.json') {
+      // Code can import a manifest (`require('../package.json').version`), so its importers run on any edit.
+      sovraChanges.add(path);
       const manifest = changes.manifests.find((m) => m.path === path);
       if (manifest && !manifest.otherFields) continue;
       widenProject(project, targetsOf(project), path, 'package.json changed beyond dependency ranges', files, sovraChanges);

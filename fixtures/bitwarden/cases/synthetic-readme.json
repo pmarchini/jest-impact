@@ -1,0 +1,10 @@
+{
+  "name": "synthetic-readme",
+  "category": "synthetic",
+  "description": "Edit a README in libs/guid",
+  "patch": "synthetic-readme.patch",
+  "expect": {
+    "runAll": false,
+    "maxAboveFloor": 0
+  }
+}

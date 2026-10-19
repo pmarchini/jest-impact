@@ -134,6 +134,29 @@ describe('analyze', () => {
     assert.equal(report.runAll[0]?.rule, 'global-file');
   });
 
+  it('counts a Jest config that no Nx project contains', async () => {
+    await analyzeChange({
+      'tools/check/jest.config.js': 'module.exports = {};\n',
+      'tools/check/check.spec.ts': "import { sum } from '@acme/utils';\ntest('check', () => expect(sum(1, 1)).toBe(2));\n",
+    });
+    write({ 'libs/utils/src/sum.ts': 'export const sum = (a: number, b: number) => b + a;\n' });
+    git('commit', '-q', '-am', 'change sum');
+    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    assert.deepEqual(selected(report)['tools/check'], ['tools/check/check.spec.ts']);
+    assert.equal(report.projects.find((p) => p.project === 'tools/check')?.target, '');
+  });
+
+  it('runs importers of a package.json when only its version changes', async () => {
+    await analyzeChange({
+      'libs/ui/src/version.ts': "export const version: string = require('../package.json').version;\n",
+      'libs/ui/src/version.spec.ts': "import { version } from './version';\ntest('version', () => expect(version).toBeDefined());\n",
+    });
+    write({ 'libs/ui/package.json': JSON.stringify({ name: '@acme/ui', version: '1.0.1', dependencies: { '@acme/utils': '*' } }) });
+    git('commit', '-q', '-am', 'bump ui');
+    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/version.spec.ts'] });
+  });
+
   it('always runs tests that reach a dynamic require, even when nothing they import changed', async () => {
     await analyzeChange({ 'libs/ui/src/label.ts': "export const label = require(process.env.LABEL ?? './x');\n" });
     const report = await analyze({ workspaceRoot: root, base: 'HEAD', head: 'HEAD' });

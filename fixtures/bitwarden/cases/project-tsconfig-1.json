@@ -1,0 +1,7 @@
+{
+  "name": "project-tsconfig-1",
+  "category": "project-tsconfig",
+  "description": "feat(tests): add basic key-management e2e test suite (#23477)",
+  "commit": "3637a20c93967987915d0dc4697a6818ea9c40a9",
+  "expect": {}
+}

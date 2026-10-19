@@ -1,0 +1,11 @@
+diff --git a/tsconfig.base.json b/tsconfig.base.json
+index 9b7efdb2d8..27bf410120 100644
+--- a/tsconfig.base.json
++++ b/tsconfig.base.json
+@@ -1,5 +1,6 @@
+ {
+   "compilerOptions": {
++    "noUnusedLocals": false,
+     "strict": false,
+     "pretty": true,
+     "moduleResolution": "bundler",

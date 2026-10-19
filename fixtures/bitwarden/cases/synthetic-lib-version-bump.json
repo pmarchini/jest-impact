@@ -1,0 +1,10 @@
+{
+  "name": "synthetic-lib-version-bump",
+  "category": "synthetic",
+  "description": "Bump libs/guid/package.json version; nothing reads it",
+  "patch": "synthetic-lib-version-bump.patch",
+  "expect": {
+    "runAll": false,
+    "maxAboveFloor": 0
+  }
+}

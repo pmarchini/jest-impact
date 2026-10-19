@@ -1,0 +1,7 @@
+{
+  "name": "locales-1",
+  "category": "locales",
+  "description": "Autosync the updated translations (#23967)",
+  "commit": "403a7946f8c26a898081dad278a1e908b52324a3",
+  "expect": {}
+}

@@ -1,0 +1,9 @@
+diff --git a/libs/guid/README.md b/libs/guid/README.md
+index 506ef221a9..2dc6755d25 100644
+--- a/libs/guid/README.md
++++ b/libs/guid/README.md
+@@ -3,3 +3,4 @@
+ Owned by: platform
+ 
+ Guid utilities extracted from common
++# touched

@@ -1,0 +1,15 @@
+{
+  "name": "synthetic-dynamic-import",
+  "category": "synthetic",
+  "description": "Add import(variable) to libs/guid; tests reaching it must always run",
+  "patch": "synthetic-dynamic-import.patch",
+  "expect": {
+    "runAll": false,
+    "uncertain": [
+      "libs/guid/src/index.ts"
+    ],
+    "mustSelect": [
+      "libs/guid/src/guid.spec.ts"
+    ]
+  }
+}

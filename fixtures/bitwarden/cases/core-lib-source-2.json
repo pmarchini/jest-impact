@@ -1,0 +1,7 @@
+{
+  "name": "core-lib-source-2",
+  "category": "core-lib-source",
+  "description": "[PM-42404] refactor: Add the push API to the SdkService abstraction as no-ops (#23863)",
+  "commit": "f710c9f8375c4caac622c6092a59f3843eedea9d",
+  "expect": {}
+}

@@ -1,0 +1,9 @@
+diff --git a/libs/shared/jest.config.angular.js b/libs/shared/jest.config.angular.js
+index 4811677b68..7fb2f45078 100644
+--- a/libs/shared/jest.config.angular.js
++++ b/libs/shared/jest.config.angular.js
+@@ -38,3 +38,4 @@ module.exports = {
+   // Improves on-demand performance, for watches prefer 25%, overridable by setting --maxWorkers
+   maxWorkers: "50%",
+ };
++// touched by jest-impact case

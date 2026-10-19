@@ -5,11 +5,13 @@ export type NxProject = {
   name: string;
   /** Project root relative to the workspace root, '.' for the root project. */
   root: string;
+  /** Not an Nx project: a Jest config no Nx project contains, run with plain `jest --config`. */
+  jestOnly?: boolean;
 };
 
 export type JestTarget = {
   project: NxProject;
-  /** The Nx target that runs Jest for this config, such as `test`. */
+  /** The Nx target that runs Jest for this config, such as `test`; empty for a Jest-only project. */
   target: string;
   /** Jest config path relative to the workspace root. */
   configFile: string;
@@ -57,9 +59,14 @@ export function findJestTargets(workspaceRoot: string, files: string[], projects
   const targets: JestTarget[] = [];
   for (const configFile of candidates) {
     const project = owningProject(configFile, projects);
-    if (!project) continue;
-    const target = explicitJestTarget(workspaceRoot, project, configFile) ?? pluginTarget;
-    if (target) targets.push({ project, target, configFile });
+    const target = project && (explicitJestTarget(workspaceRoot, project, configFile) ?? pluginTarget);
+    if (project && target) {
+      targets.push({ project, target, configFile });
+    } else {
+      // Still a Jest project (a root `jest` run picks it up through `projects`), so its tests count.
+      const root = posix.dirname(configFile);
+      targets.push({ project: { name: root, root, jestOnly: true }, target: '', configFile });
+    }
   }
   return targets;
 }

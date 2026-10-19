@@ -1,0 +1,13 @@
+{
+  "name": "synthetic-snapshot",
+  "category": "synthetic",
+  "description": "Edit one snapshot file",
+  "patch": "synthetic-snapshot.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "apps/browser/src/autofill/overlay/inline-menu/pages/button/autofill-inline-menu-button.spec.ts"
+    ],
+    "maxAboveFloor": 1
+  }
+}

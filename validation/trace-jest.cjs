@@ -4,7 +4,10 @@
 //
 // TRACE_ROOT: workspace root (absolute, trailing slash). TRACE_DIR: output dir.
 // Writes one JSON object per test to TRACE_DIR/<pid>.jsonl:
-//   { test, files: [workspace-relative paths], packages: [npm package names] }
+//   { test, files, packages, reads }
+// `files` and `packages` are what the test depends on: every module Jest's
+// registry executed for it, plus every non-code file it read. `reads` is every
+// workspace file read, which also includes files ts-jest only type-checks.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +18,8 @@ const outDir = process.env.TRACE_DIR;
 const realReadFileSync = fs.readFileSync;
 const realAppend = fs.appendFileSync;
 
-let current; // { test, files: Set, packages: Set }
+let current; // { test, files: Set, packages: Set, reads: Set }
+const CODE = /\.[cm]?[jt]sx?$/;
 
 function packageOf(file) {
   const rest = file.slice(file.lastIndexOf('/node_modules/') + '/node_modules/'.length).split('/');
@@ -24,13 +28,32 @@ function packageOf(file) {
 
 function record(file) {
   if (!current || typeof file !== 'string' || !file.startsWith(root)) return;
+  if (file.includes('/node_modules/')) {
+    if (!CODE.test(file)) current.packages.add(packageOf(file));
+    return;
+  }
+  const rel = file.slice(root.length);
+  current.reads.add(rel);
+  // The resolver reads every package.json it passes; one the test requires shows up as a module instead.
+  if (!CODE.test(file) && path.basename(file) !== 'package.json') current.files.add(rel);
+}
+
+function recordModule(file) {
+  if (!current || typeof file !== 'string' || !file.startsWith(root)) return;
   if (file.includes('/node_modules/')) current.packages.add(packageOf(file));
   else current.files.add(file.slice(root.length));
 }
 
+/** Every module the runtime has executed; called before the registry is cleared. */
+function harvest(runtime) {
+  for (const registry of [runtime._moduleRegistry, runtime._isolatedModuleRegistry, runtime._esmoduleRegistry, runtime._cjsNamedExports]) {
+    if (registry && typeof registry.keys === 'function') for (const key of registry.keys()) recordModule(key);
+  }
+}
+
 function flush() {
   if (!current) return;
-  const line = JSON.stringify({ test: current.test, files: [...current.files].sort(), packages: [...current.packages].sort() });
+  const line = JSON.stringify({ test: current.test, files: [...current.files].sort(), packages: [...current.packages].sort(), reads: [...current.reads].sort() });
   realAppend.call(fs, path.join(outDir, `${process.pid}.jsonl`), line + '\n');
   current = undefined;
 }
@@ -55,10 +78,19 @@ Module._load = function (request, ...rest) {
     constructor(...args) {
       flush();
       const testPath = args[6];
-      current = { test: testPath.slice(root.length), files: new Set([testPath.slice(root.length)]), packages: new Set() };
+      current = { test: testPath.slice(root.length), files: new Set([testPath.slice(root.length)]), packages: new Set(), reads: new Set() };
       super(...args);
     }
+    _execModule(localModule, ...args) {
+      recordModule(localModule.filename);
+      return super._execModule(localModule, ...args);
+    }
+    resetModules(...args) {
+      harvest(this);
+      return super.resetModules(...args);
+    }
     teardown(...args) {
+      harvest(this);
       const result = super.teardown(...args);
       flush();
       return result;

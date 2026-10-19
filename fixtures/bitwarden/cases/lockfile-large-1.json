@@ -1,0 +1,7 @@
+{
+  "name": "lockfile-large-1",
+  "category": "lockfile-large",
+  "description": "[PM-42819] Route CLI cross-instance Send receive through SendReceiveClient (#23714)",
+  "commit": "6b14f423fb2061d15a3a24dc26d7e141bc39fa13",
+  "expect": {}
+}

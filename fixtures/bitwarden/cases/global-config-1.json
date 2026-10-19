@@ -1,0 +1,7 @@
+{
+  "name": "global-config-1",
+  "category": "global-config",
+  "description": "[PM-39926] feat(billing): client foundation for preview-driven cart — types, adapter, translation, facades, HTTP clients (#22173)",
+  "commit": "3040c92ca09461bd7b0b4ce6c4a14281a3c61469",
+  "expect": {}
+}

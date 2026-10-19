@@ -1,0 +1,7 @@
+diff --git a/libs/guid/src/__mocks__/index.ts b/libs/guid/src/__mocks__/index.ts
+new file mode 100644
+index 0000000000..24750c4e62
+--- /dev/null
++++ b/libs/guid/src/__mocks__/index.ts
+@@ -0,0 +1 @@
++export const isGuid = () => true;

@@ -1,0 +1,7 @@
+{
+  "name": "project-jest-config-2",
+  "category": "project-jest-config",
+  "description": "feat(automation-driver): wire-in automation-driver (#21921)",
+  "commit": "8b610aa1fa88605bfe494510dcfc41d90bf23ae7",
+  "expect": {}
+}

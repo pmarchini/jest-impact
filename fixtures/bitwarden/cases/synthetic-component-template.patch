@@ -1,0 +1,10 @@
+diff --git a/libs/components/src/accordion/accordion.component.html b/libs/components/src/accordion/accordion.component.html
+index b6b8890cac..1b22d4e35c 100644
+--- a/libs/components/src/accordion/accordion.component.html
++++ b/libs/components/src/accordion/accordion.component.html
+@@ -40,3 +40,5 @@
+     <ng-content></ng-content>
+   </div>
+ </div>
++
++<!-- touched by jest-impact case -->

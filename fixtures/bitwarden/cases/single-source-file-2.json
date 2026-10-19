@@ -1,0 +1,7 @@
+{
+  "name": "single-source-file-2",
+  "category": "single-source-file",
+  "description": "[CL-1346] test: Add filter menu story with long labels and counts (#23767)",
+  "commit": "bd60c84e752eb2bc5bcfa753452ba82462ecf095",
+  "expect": {}
+}

@@ -1,0 +1,13 @@
+diff --git a/libs/guid/src/guid-extra.spec.ts b/libs/guid/src/guid-extra.spec.ts
+new file mode 100644
+index 0000000000..e802d4674d
+--- /dev/null
++++ b/libs/guid/src/guid-extra.spec.ts
+@@ -0,0 +1,7 @@
++import { isGuid } from "./index";
++
++describe("isGuid (jest-impact case)", () => {
++  it("rejects an empty string", () => {
++    expect(isGuid("")).toBe(false);
++  });
++});

@@ -1,0 +1,7 @@
+{
+  "name": "core-lib-source-1",
+  "category": "core-lib-source",
+  "description": "[PM-24325] Remove pm-22134-sdk-cipher-list-view feature flag (#23872)",
+  "commit": "34c7cb55c32a525f409643c1ba91b558ad4c85aa",
+  "expect": {}
+}

@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-deleted-spec-data",
+  "category": "synthetic",
+  "description": "Delete a spec-data module that one importer spec imports",
+  "patch": "synthetic-deleted-spec-data.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "libs/importer/src/importers/onepassword/onepassword-1pux-importer.spec.ts"
+    ]
+  }
+}

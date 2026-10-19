@@ -1,0 +1,7 @@
+{
+  "name": "docs-only-2",
+  "category": "docs-only",
+  "description": "Require label to run desktop fork builds and fetch signing secrets after the build (#23808)",
+  "commit": "0cdf86f75472b1862eed6ff0cb24a893ca6846fe",
+  "expect": {}
+}

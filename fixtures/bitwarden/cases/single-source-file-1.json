@@ -1,0 +1,7 @@
+{
+  "name": "single-source-file-1",
+  "category": "single-source-file",
+  "description": "[PM-44965] Update GA date (#23844)",
+  "commit": "e87d4568de34731b14e8979cda92aa88e170ca70",
+  "expect": {}
+}

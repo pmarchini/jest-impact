@@ -1,0 +1,7 @@
+{
+  "name": "workspace-manifest-1",
+  "category": "workspace-manifest",
+  "description": "Bumped client version(s) (#23963)",
+  "commit": "7b8412a52d78c2e543d9b352396b15348fd0ffa5",
+  "expect": {}
+}

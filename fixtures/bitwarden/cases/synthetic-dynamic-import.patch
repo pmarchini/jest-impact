@@ -1,0 +1,10 @@
+diff --git a/libs/guid/src/index.ts b/libs/guid/src/index.ts
+index 3ef62725eb..ba2598976d 100644
+--- a/libs/guid/src/index.ts
++++ b/libs/guid/src/index.ts
+@@ -11,3 +11,5 @@ export function newGuid(): string {
+ export function isGuid(id: string): boolean {
+   return guidRegex.test(id);
+ }
++
++export const loadLater = (name: string) => import(name);

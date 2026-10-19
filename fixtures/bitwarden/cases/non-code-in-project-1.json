@@ -1,0 +1,7 @@
+{
+  "name": "non-code-in-project-1",
+  "category": "non-code-in-project",
+  "description": "[PM-42582] Add Staged Member Management Actions (#22828)",
+  "commit": "22a15c8b16eb6c1eeef7c08ac8abfb9be18c430e",
+  "expect": {}
+}

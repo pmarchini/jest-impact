@@ -1,0 +1,13 @@
+{
+  "name": "synthetic-app-version-bump",
+  "category": "synthetic",
+  "description": "Bump apps/cli/package.json version; service-container requires it",
+  "patch": "synthetic-app-version-bump.patch",
+  "expect": {
+    "runAll": false,
+    "mustSelect": [
+      "apps/cli/src/service-container/service-container.spec.ts",
+      "bitwarden_license/bit-cli/src/service-container.spec.ts"
+    ]
+  }
+}

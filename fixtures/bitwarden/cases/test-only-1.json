@@ -1,0 +1,7 @@
+{
+  "name": "test-only-1",
+  "category": "test-only",
+  "description": "PM-44119 - Add spec for web Key Connector domain confirmation invite cleanup (#23769)",
+  "commit": "d139a66db5cda45399e037074a818ccaf580c5d4",
+  "expect": {}
+}

@@ -1,0 +1,7 @@
+{
+  "name": "deleted-source-1",
+  "category": "deleted-source",
+  "description": "Revert \"Sign Electron Framework files in parallel on macOS (#23580)\" (#23676)",
+  "commit": "9fc68660b290ead95df832540538dc8b6e780a1f",
+  "expect": {}
+}

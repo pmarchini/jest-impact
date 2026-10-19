@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-project-jest-config",
+  "category": "synthetic",
+  "description": "Edit libs/guid/jest.config.js",
+  "patch": "synthetic-project-jest-config.patch",
+  "expect": {
+    "runAll": false,
+    "wholeProjects": [
+      "libs/guid/jest.config.js"
+    ]
+  }
+}

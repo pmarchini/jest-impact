@@ -13,7 +13,7 @@ export function formatText(report: Report): string {
   }
   for (const project of report.projects) {
     if (project.run === 'none') continue;
-    lines.push(`${project.project}:${project.target}  ${project.run === 'all' ? 'all' : project.tests.length} of ${project.totalTests}`);
+    lines.push(`${project.target ? `${project.project}:${project.target}` : `${project.configFile} (jest)`}  ${project.run === 'all' ? 'all' : project.tests.length} of ${project.totalTests}`);
     if (report.runAll.length === 0) for (const reason of project.reasons) lines.push(`  because ${describe(reason)}`);
     if (project.run === 'some') for (const test of project.tests) lines.push(`  ${test}`);
   }
@@ -37,7 +37,9 @@ export function formatNxCommands(report: Report, workspaceRoot: string): string 
 }
 
 function nxCommand(project: ProjectResult, workspaceRoot: string): string {
-  const base = `npx nx run ${project.project}:${project.target}`;
+  const base = project.target
+    ? `npx nx run ${project.project}:${project.target}`
+    : `npx jest --config ${shellQuote(join(workspaceRoot, project.configFile))}`;
   if (project.run === 'all') return base;
   return `${base} --runTestsByPath ${project.tests.map((t) => shellQuote(join(workspaceRoot, t))).join(' ')}`;
 }

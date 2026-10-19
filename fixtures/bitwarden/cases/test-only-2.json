@@ -1,0 +1,7 @@
+{
+  "name": "test-only-2",
+  "category": "test-only",
+  "description": "failing key service test (#22875)",
+  "commit": "c85f3658a6677717ea755145c1f229b5cb5ec30d",
+  "expect": {}
+}

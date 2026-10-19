@@ -1,0 +1,7 @@
+{
+  "name": "source-and-spec-2",
+  "category": "source-and-spec",
+  "description": "PM-42725 polynomial redos in enpass importer (#22988)",
+  "commit": "b03c6015a6f243cc33fdedfcaa7d7ccbc1cfb7c9",
+  "expect": {}
+}

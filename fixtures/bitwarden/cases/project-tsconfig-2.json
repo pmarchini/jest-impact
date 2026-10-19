@@ -1,0 +1,7 @@
+{
+  "name": "project-tsconfig-2",
+  "category": "project-tsconfig",
+  "description": "Create scaffold for libs/managed-settings lib (#22695)",
+  "commit": "907324546d4baafdd514d95fae98adb1f3a3c08e",
+  "expect": {}
+}
