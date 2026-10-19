@@ -107,10 +107,13 @@ npm run build     # emits dist/ for the bin
 
 ## Publishing
 
+Releases publish from GitHub Actions (`.github/workflows/release.yml`) when a `v*` tag is pushed:
+
 ```sh
 npm version patch         # or minor / major: bumps package.json, commits and tags
-npm publish               # typechecks, tests and builds first (prepublishOnly, prepack)
-git push --follow-tags
+git push --follow-tags    # the Release workflow tests, builds, publishes and creates a GitHub release
 ```
+
+The workflow uses npm trusted publishing, so no npm token is stored in the repo. It is set up once on npmjs.com under the package's Settings > Trusted publishing: GitHub Actions, owner `pmarchini`, repository `jest-impact`, workflow `release.yml`, environment `npm`. npm only offers this for a package that already exists, so the first version is published by hand with `npm publish`.
 
 `npm pack` writes the tarball without publishing, to try it locally with `npm install ./jest-impact-<version>.tgz`.
