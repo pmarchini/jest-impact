@@ -1,6 +1,6 @@
 {
   "name": "jest-impact",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Lists the Jest test files in each Nx project that a commit range can affect, using sovra for the import graph.",
   "license": "MIT",
   "author": "Pietro Marchini",
