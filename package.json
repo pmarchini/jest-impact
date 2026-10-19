@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Lists the Jest test files in each Nx project that a commit range can affect, using sovra for the import graph.",
   "license": "MIT",
-  "private": true,
+  "private": false,
   "type": "module",
   "bin": {
     "jest-impact": "./dist/cli.js"
