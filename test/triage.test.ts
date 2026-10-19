@@ -29,6 +29,11 @@ describe('triage', () => {
     assert.equal(verdict(diagnostic('Require call must have a single string literal argument', 'const m = require(name);')), 'uncertain');
   });
 
+  it('recognises a jest.mock factory that spans several lines', () => {
+    const raw = `\n  x Require call must have a single string literal argument\n    ,-[src/a.spec.ts:6:1]\n  5 |     let m: jest.Mock;\n  6 | ,-> jest.mock("../flags", () => ({\n  7 | |     ...jest.requireActual("../flags"),\n  8 | \`-> }));\n    \`----\n`;
+    assert.equal(verdict(raw), 'ignore');
+  });
+
   it('keeps the file of a diagnostic', () => {
     const error = parseSovraError(diagnostic('Import call must not have dynamic template literals', 'import(`./x/${y}`);'));
     assert.equal(error.kind, 'dynamic');

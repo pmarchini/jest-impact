@@ -42,10 +42,13 @@ export function parseSovraError(raw: string): SovraError {
   return { kind: 'other', file, message: raw.trim() };
 }
 
-/** The source line a miette diagnostic quotes, such as ` 6 | jest.mock('./c', ...)`. */
+/**
+ * The source line a miette diagnostic quotes, such as ` 6 | jest.mock('./c', ...)`.
+ * A span over several lines marks its first line with `,-> `, which is dropped.
+ */
 function sourceLine(raw: string, line: number): string {
-  const match = new RegExp(`^\\s*${line} \\| (.*)$`, 'm').exec(raw);
-  return match?.[1] ?? '';
+  const match = new RegExp(`^\\s*${line} \\| (,-> )?(.*)$`, 'm').exec(raw);
+  return match?.[2] ?? '';
 }
 
 // jest.mock('./x', factory) replaces the module, so the real file is never loaded.
