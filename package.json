@@ -1,0 +1,35 @@
+{
+  "name": "jest-impact",
+  "version": "0.0.1",
+  "description": "Lists the Jest test files in each Nx project that a commit range can affect, using sovra for the import graph.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jest-impact": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "start": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@yarnpkg/lockfile": "1.1.0",
+    "micromatch": "4.0.8",
+    "sovra": "0.5.0",
+    "sucrase": "3.35.1",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/micromatch": "4.0.10",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}
