@@ -1,12 +1,12 @@
 {
   "name": "synthetic-manual-mock",
   "category": "synthetic",
-  "description": "Add a __mocks__ file to libs/guid",
+  "description": "Add a __mocks__ file for libs/guid/src/index.ts; only tests that jest.mock a module of that name may need it",
   "patch": "synthetic-manual-mock.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
-      "libs/guid/jest.config.js"
+    "mustSkip": [
+      "libs/guid/src/guid.spec.ts"
     ]
   }
 }

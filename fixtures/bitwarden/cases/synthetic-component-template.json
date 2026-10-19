@@ -1,12 +1,9 @@
 {
   "name": "synthetic-component-template",
   "category": "synthetic",
-  "description": "Edit an Angular template in libs/components",
+  "description": "Edit an Angular template in libs/components; importers of its component must run, not the whole project",
   "patch": "synthetic-component-template.patch",
   "expect": {
-    "runAll": false,
-    "wholeProjects": [
-      "libs/components/jest.config.js"
-    ]
+    "runAll": false
   }
 }

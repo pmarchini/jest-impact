@@ -79,8 +79,8 @@ The Node API is `analyze({ workspaceRoot, base, head })`, which returns the same
 | A file a `moduleNameMapper` entry points at (or its imports) changed, and sovra cannot apply that mapping | Run each project with that mapping |
 | A package the Jest config loads changed (transform, environment, preset) | Run that project |
 | The config needs a package that is not installed, or uses a custom resolver not in `safeResolvers` | Run that project, on every run |
-| A `__mocks__` file changed | Run that project |
-| A non-code file changed inside a project (template, JSON, fixture) | Run that project, and treat its code as changed for importers elsewhere |
+| A `__mocks__` file changed | Tests that `jest.mock()` that module without a factory (a package mock in a Jest root: tests importing the package); the project when the mocked module cannot be found |
+| A non-code file changed (template, JSON, fixture) | Importers of the code files that name it in a relative string (`templateUrl: './x.html'`, `require('./x.json')`); when no code names it, run its project and treat the project's code as changed |
 | A workspace `package.json` changed beyond dependencies | Same as a non-code file |
 | Any `package.json` changed | Code that imports it runs (`require('../package.json').version`) |
 | A Jest config that no Nx project contains | Reported as its own project, run with `jest --config` |

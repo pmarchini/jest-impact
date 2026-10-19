@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extname, join, posix, relative, resolve } from 'node:path';
 import micromatch from 'micromatch';
@@ -10,6 +11,7 @@ import { CONFIG_FALLBACKS } from './jest/nx-preset.ts';
 import { loadJestProjectConfig, type JestProjectConfig } from './jest/project-config.ts';
 import { selectTestFiles } from './jest/test-files.ts';
 import { findDynamicImports } from './dynamic-imports.ts';
+import { findReferences } from './references.ts';
 import { discoverProjects, findJestTargets, owningProject, type JestTarget, type NxProject } from './nx/projects.ts';
 import { buildResolverOptions, parseJsonc } from './resolver-options.ts';
 import { loadSettings, type Settings } from './settings.ts';
@@ -301,8 +303,17 @@ function applyFileRules(
       continue;
     }
     if (path.split('/').includes('__mocks__')) {
-      for (const target of targetsOf(project)) target.forced.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
       sovraChanges.add(path);
+      const mocked = mockedModule(root, path, targets);
+      if (mocked?.startsWith('npm:')) {
+        // A package mock in a root replaces the package for every test that imports it.
+        sovraChanges.add(mocked);
+      } else if (mocked) {
+        // A user module mock is used only where a test calls jest.mock() on that module without a factory.
+        for (const caller of mockCallers(root, mocked)) sovraChanges.add(caller);
+      } else {
+        for (const target of targetsOf(project)) target.forced.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
+      }
       continue;
     }
     if (path.endsWith('.snap') && posix.basename(posix.dirname(path)) === '__snapshots__') {
@@ -317,6 +328,13 @@ function applyFileRules(
     }
     if (!project) {
       report.changes.ignoredFiles.push(path);
+      continue;
+    }
+    // A file named by the code that loads it (a template, an imported JSON) affects
+    // that code's importers. One nothing names may be read by any code in its project.
+    const references = findReferences(root, path);
+    if (references.length > 0) {
+      for (const reference of references) sovraChanges.add(reference);
       continue;
     }
     widenProject(project, targetsOf(project), path, 'non-code file changed; it may be read at runtime', files, sovraChanges);
@@ -341,6 +359,59 @@ function widenProject(
   for (const f of files) {
     if (f.startsWith(prefix) && CODE_EXTENSIONS.has(extname(f))) sovraChanges.add(f);
   }
+}
+
+/**
+ * What a `__mocks__` file stands in for: `npm:<name>` for a package mock in a
+ * Jest root, or the sibling module for a user module mock. Undefined when
+ * neither exists, so the caller widens instead.
+ */
+function mockedModule(root: string, path: string, targets: LoadedTarget[]): string | undefined {
+  const parts = path.split('/');
+  const at = parts.lastIndexOf('__mocks__');
+  const dir = parts.slice(0, at).join('/');
+  const inside = parts.slice(at + 1).join('/');
+  const name = inside.replace(/\.[cm]?[jt]sx?$/, '');
+  if (name === inside || name.endsWith('/index')) return undefined;
+  const roots = new Set(targets.flatMap((t) => t.config?.roots ?? []));
+  if (roots.has(join(root, dir))) return `npm:${name}`;
+  for (const ext of CODE_EXTENSIONS) {
+    const sibling = posix.join(dir, name + ext);
+    if (existsSync(join(root, sibling))) return sibling;
+  }
+  return undefined;
+}
+
+const MOCK_CALL = /jest\.(?:mock|doMock|unstable_mockModule)\(\s*(['"`])([^'"`]+)\1\s*\)/g;
+
+/**
+ * Files that call `jest.mock('<module>')` without a factory, which is when Jest
+ * loads a user module's `__mocks__` file. A relative specifier must resolve to
+ * the module; any other specifier whose last segment names it counts too,
+ * since aliases are not resolved here.
+ */
+function mockCallers(root: string, module: string): string[] {
+  const name = posix.basename(module).replace(/\.[^.]+$/, '');
+  const stem = module.replace(/\.[^.]+$/, '');
+  let candidates: string[];
+  try {
+    candidates = execFileSync('git', ['grep', '-l', '-E', '-e', 'jest\\.(mock|doMock|unstable_mockModule)\\(', '--', '*.ts', '*.tsx', '*.js', '*.jsx', '*.mts', '*.cts', '*.mjs', '*.cjs', ':!**/node_modules/**'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26 })
+      .split('\n')
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+  return candidates.filter((file) => {
+    for (const [, , spec] of readFileSync(join(root, file), 'utf8').matchAll(MOCK_CALL)) {
+      if (spec!.startsWith('.')) {
+        const target = posix.normalize(posix.join(posix.dirname(file), spec!)).replace(/\.[cm]?[jt]sx?$/, '');
+        if (target === stem || (name === 'index' && target === posix.dirname(module))) return true;
+      } else if (posix.basename(spec!) === name || (name === 'index' && spec!.length > 0)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 /** Every tracked tsconfig that extends `changed`, directly or through other tsconfigs. */

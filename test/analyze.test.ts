@@ -157,6 +157,25 @@ describe('analyze', () => {
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/version.spec.ts'] });
   });
 
+  it('selects importers of the code that names a changed template, not the whole project', async () => {
+    await analyzeChange({ 'libs/ui/src/button.ts': "import { sum } from '@acme/utils';\nexport const templateUrl = './button.html';\nexport const width = () => sum(1, 1);\n" });
+    write({ 'libs/ui/src/button.html': '<button class="wide"></button>\n' });
+    git('commit', '-q', '-am', 'restyle button');
+    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/button.spec.ts'] });
+  });
+
+  it('selects only the tests that jest.mock a module when its __mocks__ file changes', async () => {
+    await analyzeChange({
+      'libs/ui/src/__mocks__/label.ts': "export const label = 'mock';\n",
+      'libs/ui/src/label-mocked.spec.ts': "jest.mock('./label');\nimport { label } from './label';\ntest('mocked', () => expect(label).toBe('mock'));\n",
+    });
+    write({ 'libs/ui/src/__mocks__/label.ts': "export const label = 'mocked';\n" });
+    git('commit', '-q', '-am', 'change mock');
+    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/label-mocked.spec.ts'] });
+  });
+
   it('runs projects whose tsconfig extends a changed tsconfig in another project', async () => {
     await analyzeChange({
       'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true } }),
