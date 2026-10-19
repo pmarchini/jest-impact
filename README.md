@@ -2,6 +2,8 @@
 
 Lists the Jest test files in each Nx project that the changes between two commits can affect, so CI can run only those. [sovra](https://github.com/oblador/sovra) walks the import graph; this package prepares its inputs and decides when to widen the run.
 
+jest-impact is an independent project for use with Jest. It is not affiliated with or endorsed by the Jest project or the OpenJS Foundation.
+
 Anything the analyzer cannot reason about runs. A false negative (a skipped test that should have run) is the one failure it is designed to avoid.
 
 ## Usage
