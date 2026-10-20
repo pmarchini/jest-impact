@@ -5,8 +5,8 @@ import { parse as parseYaml } from 'yaml';
 
 export type WorkspacePackage = {
   name: string;
-  /** Directory relative to the workspace root. */
-  dir: string;
+  /** Package directory relative to the workspace root, like NxProject.root. */
+  root: string;
 };
 
 export type LinkResult = {
@@ -25,10 +25,10 @@ export function workspacePackages(workspaceRoot: string, files: string[]): Works
   for (const file of files) {
     if (posix.basename(file) !== 'package.json' || file === 'package.json') continue;
     if (file.includes('node_modules/')) continue;
-    const dir = posix.dirname(file);
-    if (!micromatch.isMatch(dir, include) || micromatch.isMatch(dir, exclude)) continue;
+    const root = posix.dirname(file);
+    if (!micromatch.isMatch(root, include) || micromatch.isMatch(root, exclude)) continue;
     const name = readName(join(workspaceRoot, file));
-    if (name) packages.push({ name, dir });
+    if (name) packages.push({ name, root });
   }
   return packages;
 }
@@ -47,7 +47,7 @@ export function linkWorkspacePackages(workspaceRoot: string, packages: Workspace
       continue;
     }
     mkdirSync(dirname(linkPath), { recursive: true });
-    symlinkSync(join(workspaceRoot, pkg.dir), linkPath, 'dir');
+    symlinkSync(join(workspaceRoot, pkg.root), linkPath, 'dir');
     result.linked.push(pkg);
   }
   return result;

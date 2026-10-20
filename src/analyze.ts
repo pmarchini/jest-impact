@@ -77,25 +77,25 @@ type LoadedTarget = JestTarget & {
 
 export async function analyze(options: AnalyzeOptions): Promise<Report> {
   const started = performance.now();
-  const root = resolve(options.workspaceRoot);
-  const settings = options.settings ?? loadSettings(root);
-  const base = resolveCommit(root, options.base);
-  const head = resolveCommit(root, options.head);
+  const workspaceRoot = resolve(options.workspaceRoot);
+  const settings = options.settings ?? loadSettings(workspaceRoot);
+  const base = resolveCommit(workspaceRoot, options.base);
+  const head = resolveCommit(workspaceRoot, options.head);
   const warnings: string[] = [];
 
-  const files = trackedFiles(root);
-  const absoluteFiles = files.map((f) => join(root, f));
-  const projects = discoverProjects(root, files, options.nxGraph);
-  const packages = workspacePackages(root, files);
+  const files = trackedFiles(workspaceRoot);
+  const absoluteFiles = files.map((f) => join(workspaceRoot, f));
+  const projects = discoverProjects(workspaceRoot, files, options.nxGraph);
+  const packages = workspacePackages(workspaceRoot, files);
   let link: LinkResult | undefined;
-  if (options.link !== false) link = linkWorkspacePackages(root, packages);
-  const targets = await loadTargets(root, files, absoluteFiles, projects, settings);
+  if (options.link !== false) link = linkWorkspacePackages(workspaceRoot, packages);
+  const targets = await loadTargets(workspaceRoot, files, absoluteFiles, projects, settings);
   for (const target of targets) if (target.project.jestOnly) projects.push(target.project);
   const jestOnly = targets.filter((t) => t.project.jestOnly).map((t) => t.configFile);
   if (jestOnly.length > 0) warnings.push(`${jestOnly.length} Jest configs belong to no Nx project and are reported as plain Jest runs: ${jestOnly.join(', ')}`);
 
   const configs = targets.flatMap((t) => (t.config ? [t.config] : []));
-  const resolver = buildResolverOptions(root, configs, settings.conditionNames);
+  const resolver = buildResolverOptions(workspaceRoot, configs, settings.conditionNames);
   warnings.push(...resolver.warnings);
   // sovra cannot apply these mappings, so it follows the import to the real module. The
   // mapped file is loaded in that project instead: it widens the project like a setup file.
@@ -106,8 +106,8 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
     }
   }
 
-  const manifestPaths = ['package.json', ...packages.map((p) => `${p.dir}/package.json`)];
-  const changes = options.changeSet ?? collectChanges(root, base, head, manifestPaths);
+  const manifestPaths = ['package.json', ...packages.map((p) => `${p.root}/package.json`)];
+  const changes = options.changeSet ?? collectChanges(workspaceRoot, base, head, manifestPaths);
   const report: Report = {
     base,
     head,
@@ -122,11 +122,11 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
   };
 
   // The root manifest is often in sharedGlobals, but its diff is already read field by field below.
-  const sharedGlobals = nxSharedGlobals(root).filter((f) => f !== 'package.json');
+  const sharedGlobals = nxSharedGlobals(workspaceRoot).filter((f) => f !== 'package.json');
   report.runAll = globalTriggers(changes, { ...settings, globalFiles: [...settings.globalFiles, ...sharedGlobals] });
   const sovraChanges = new Set<string>();
   if (report.runAll.length === 0) {
-    applyFileRules(root, files, changes, targets, projects, settings, sovraChanges, report);
+    applyFileRules(workspaceRoot, files, changes, targets, projects, settings, sovraChanges, report);
     applyPackageRules(changes, targets);
 
     const entries = new Map<string, LoadedTarget[]>();
@@ -139,21 +139,21 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
 
     const sovraStart = performance.now();
     const previousCwd = process.cwd();
-    process.chdir(root);
+    process.chdir(workspaceRoot);
     try {
       const run = (list: string[]) => getAffected([...entries.keys()], list, resolver.options, false, REQUIRE_ALIASES);
       const first = run(changeList.length > 0 ? changeList : ['file:.jest-impact-no-change']);
       const triaged = first.errors.map((e) =>
         triage(parseSovraError(e), {
           workspacePackages: new Set(packages.map((p) => p.name)),
-          npmPackages: knownNpmPackages(root, manifestPaths, changes),
+          npmPackages: knownNpmPackages(workspaceRoot, manifestPaths, changes),
           unmappedPatterns: [...resolver.unmappedPatterns.values()].flat(),
         }),
       );
       report.ignoredErrors = triaged.filter((t) => t.verdict === 'ignore').length;
       const global = triaged.find((t) => t.verdict === 'global');
       if (global) report.runAll.push({ rule: 'sovra-error', detail: global.reason });
-      const dynamicImports = findDynamicImports(root).map((file): TriagedError => ({
+      const dynamicImports = findDynamicImports(workspaceRoot).map((file): TriagedError => ({
         kind: 'dynamic',
         file,
         line: 0,
@@ -171,7 +171,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       for (const file of affected) {
         for (const target of entries.get(file) ?? []) {
           if (target.tests.includes(file)) target.selected.add(file);
-          else target.widenReasons.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(root, file) });
+          else target.widenReasons.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(workspaceRoot, file) });
         }
       }
     } finally {
@@ -189,7 +189,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       configFile: target.configFile,
       run: all ? 'all' : tests.length > 0 ? 'some' : 'none',
       reasons: report.runAll.length > 0 ? report.runAll : dedupeReasons(target.widenReasons),
-      tests: tests.map((t) => relative(root, t)),
+      tests: tests.map((t) => relative(workspaceRoot, t)),
       totalTests: target.tests.length,
     });
   }
@@ -198,7 +198,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
 }
 
 async function loadTargets(
-  root: string,
+  workspaceRoot: string,
   files: string[],
   absoluteFiles: string[],
   projects: NxProject[],
@@ -206,16 +206,16 @@ async function loadTargets(
 ): Promise<LoadedTarget[]> {
   const evaluator = new ConfigEvaluator(CONFIG_FALLBACKS);
   const targets: LoadedTarget[] = [];
-  for (const target of findJestTargets(root, files, projects)) {
+  for (const target of findJestTargets(workspaceRoot, files, projects)) {
     const loaded: LoadedTarget = { ...target, tests: [], widenReasons: [], selected: new Set() };
     try {
-      const config = await loadJestProjectConfig(join(root, target.configFile), evaluator);
+      const config = await loadJestProjectConfig(join(workspaceRoot, target.configFile), evaluator);
       loaded.config = config;
       loaded.tests = selectTestFiles(config, absoluteFiles);
       if (config.missingPackages.length > 0) {
         loaded.widenReasons.push({ rule: 'config-incomplete', detail: `config loads packages that are not installed: ${config.missingPackages.join(', ')}` });
       }
-      const resolverId = config.resolver && (/^[./]/.test(config.resolver) ? relative(root, resolve(config.rootDir, config.resolver)) : config.resolver);
+      const resolverId = config.resolver && (/^[./]/.test(config.resolver) ? relative(workspaceRoot, resolve(config.rootDir, config.resolver)) : config.resolver);
       if (resolverId && !settings.safeResolvers.includes(resolverId)) {
         loaded.widenReasons.push({ rule: 'custom-resolver', detail: `custom Jest resolver ${resolverId}; add it to safeResolvers once its behaviour is covered` });
       }
@@ -250,7 +250,7 @@ function globalTriggers(changes: ChangeSet, settings: Settings): Reason[] {
  * code goes to sovra, config and non-code files widen their project.
  */
 function applyFileRules(
-  root: string,
+  workspaceRoot: string,
   files: string[],
   changes: ChangeSet,
   targets: LoadedTarget[],
@@ -262,7 +262,7 @@ function applyFileRules(
   const configInputOwners = new Map<string, LoadedTarget[]>();
   for (const target of targets) {
     for (const input of [...(target.config?.configModules ?? []), ...(target.config?.runtimeInputs ?? [])]) {
-      const rel = relative(root, input);
+      const rel = relative(workspaceRoot, input);
       configInputOwners.set(rel, [...(configInputOwners.get(rel) ?? []), target]);
     }
   }
@@ -294,7 +294,7 @@ function applyFileRules(
       for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'project-config', detail: 'project config file changed', file: path });
       if (base.startsWith('tsconfig')) {
         // Another project's tsconfig can extend this one.
-        for (const extender of tsconfigExtenders(root, files, path)) {
+        for (const extender of tsconfigExtenders(workspaceRoot, files, path)) {
           for (const target of targetsOf(owningProject(extender, projects))) {
             if (target.project !== project) target.widenReasons.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
           }
@@ -304,20 +304,20 @@ function applyFileRules(
     }
     if (path.split('/').includes('__mocks__')) {
       sovraChanges.add(path);
-      const mocked = mockedModule(root, path, targets);
+      const mocked = mockedModule(workspaceRoot, path, targets);
       if (mocked?.startsWith('npm:')) {
         // A package mock in a root replaces the package for every test that imports it.
         sovraChanges.add(mocked);
       } else if (mocked) {
         // A user module mock is used only where a test calls jest.mock() on that module without a factory.
-        for (const caller of mockCallers(root, mocked)) sovraChanges.add(caller);
+        for (const caller of mockCallers(workspaceRoot, mocked)) sovraChanges.add(caller);
       } else {
         for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
       }
       continue;
     }
     if (path.endsWith('.snap') && posix.basename(posix.dirname(path)) === '__snapshots__') {
-      const testFile = join(root, posix.dirname(posix.dirname(path)), base.slice(0, -'.snap'.length));
+      const testFile = join(workspaceRoot, posix.dirname(posix.dirname(path)), base.slice(0, -'.snap'.length));
       const owners = targets.filter((t) => t.tests.includes(testFile));
       for (const target of owners) target.selected.add(testFile);
       if (owners.length > 0) continue;
@@ -332,7 +332,7 @@ function applyFileRules(
     }
     // A file named by the code that loads it (a template, an imported JSON) affects
     // that code's importers. One nothing names may be read by any code in its project.
-    const references = findReferences(root, path);
+    const references = findReferences(workspaceRoot, path);
     if (references.length > 0) {
       for (const reference of references) sovraChanges.add(reference);
       continue;
@@ -366,7 +366,7 @@ function widenProject(
  * Jest root, or the sibling module for a user module mock. Undefined when
  * neither exists, so the caller widens instead.
  */
-function mockedModule(root: string, path: string, targets: LoadedTarget[]): string | undefined {
+function mockedModule(workspaceRoot: string, path: string, targets: LoadedTarget[]): string | undefined {
   const parts = path.split('/');
   const at = parts.lastIndexOf('__mocks__');
   const dir = parts.slice(0, at).join('/');
@@ -374,10 +374,10 @@ function mockedModule(root: string, path: string, targets: LoadedTarget[]): stri
   const name = inside.replace(/\.[cm]?[jt]sx?$/, '');
   if (name === inside || name.endsWith('/index')) return undefined;
   const roots = new Set(targets.flatMap((t) => t.config?.roots ?? []));
-  if (roots.has(join(root, dir))) return `npm:${name}`;
+  if (roots.has(join(workspaceRoot, dir))) return `npm:${name}`;
   for (const ext of CODE_EXTENSIONS) {
     const sibling = posix.join(dir, name + ext);
-    if (existsSync(join(root, sibling))) return sibling;
+    if (existsSync(join(workspaceRoot, sibling))) return sibling;
   }
   return undefined;
 }
@@ -390,22 +390,22 @@ const MOCK_CALL = /jest\.(?:mock|doMock|unstable_mockModule)\(\s*(['"`])([^'"`]+
  * the module; any other specifier whose last segment names it counts too,
  * since aliases are not resolved here.
  */
-function mockCallers(root: string, module: string): string[] {
+function mockCallers(workspaceRoot: string, module: string): string[] {
   const name = posix.basename(module).replace(/\.[^.]+$/, '');
   const stem = module.replace(/\.[^.]+$/, '');
   let candidates: string[];
   try {
-    candidates = execFileSync('git', ['grep', '-l', '-E', '-e', 'jest\\.(mock|doMock|unstable_mockModule)\\(', '--', '*.ts', '*.tsx', '*.js', '*.jsx', '*.mts', '*.cts', '*.mjs', '*.cjs', ':!**/node_modules/**'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26 })
+    candidates = execFileSync('git', ['grep', '-l', '-E', '-e', 'jest\\.(mock|doMock|unstable_mockModule)\\(', '--', '*.ts', '*.tsx', '*.js', '*.jsx', '*.mts', '*.cts', '*.mjs', '*.cjs', ':!**/node_modules/**'], { cwd: workspaceRoot, encoding: 'utf8', maxBuffer: 1 << 26 })
       .split('\n')
       .filter(Boolean);
   } catch {
     return [];
   }
   return candidates.filter((file) => {
-    for (const [, , spec] of readFileSync(join(root, file), 'utf8').matchAll(MOCK_CALL)) {
+    for (const [, , spec] of readFileSync(join(workspaceRoot, file), 'utf8').matchAll(MOCK_CALL)) {
       if (spec!.startsWith('.')) {
-        const target = posix.normalize(posix.join(posix.dirname(file), spec!)).replace(/\.[cm]?[jt]sx?$/, '');
-        if (target === stem || (name === 'index' && target === posix.dirname(module))) return true;
+        const mockedPath = posix.normalize(posix.join(posix.dirname(file), spec!)).replace(/\.[cm]?[jt]sx?$/, '');
+        if (mockedPath === stem || (name === 'index' && mockedPath === posix.dirname(module))) return true;
       } else if (posix.basename(spec!) === name || (name === 'index' && spec!.length > 0)) {
         return true;
       }
@@ -415,20 +415,20 @@ function mockCallers(root: string, module: string): string[] {
 }
 
 /** Every tracked tsconfig that extends `changed`, directly or through other tsconfigs. */
-function tsconfigExtenders(root: string, files: string[], changed: string): string[] {
+function tsconfigExtenders(workspaceRoot: string, files: string[], changed: string): string[] {
   const extendedBy = new Map<string, string[]>();
   for (const file of files) {
     if (!/(^|\/)tsconfig[^/]*\.json$/.test(file) || file.includes('node_modules/')) continue;
     let json: any;
     try {
-      json = parseJsonc(readFileSync(join(root, file), 'utf8'));
+      json = parseJsonc(readFileSync(join(workspaceRoot, file), 'utf8'));
     } catch {
       continue;
     }
     for (const spec of [json?.extends ?? []].flat()) {
       if (typeof spec !== 'string' || !spec.startsWith('.')) continue;
-      const target = posix.normalize(posix.join(posix.dirname(file), spec.endsWith('.json') ? spec : `${spec}.json`));
-      extendedBy.set(target, [...(extendedBy.get(target) ?? []), file]);
+      const extended = posix.normalize(posix.join(posix.dirname(file), spec.endsWith('.json') ? spec : `${spec}.json`));
+      extendedBy.set(extended, [...(extendedBy.get(extended) ?? []), file]);
     }
   }
   const found = new Set<string>();
@@ -445,9 +445,9 @@ function tsconfigExtenders(root: string, files: string[], changed: string): stri
 }
 
 /** Files listed in nx.json's sharedGlobals input, which Nx itself treats as affecting every project. */
-function nxSharedGlobals(root: string): string[] {
+function nxSharedGlobals(workspaceRoot: string): string[] {
   try {
-    const nxJson = createRequire(join(root, 'package.json'))(join(root, 'nx.json'));
+    const nxJson = createRequire(join(workspaceRoot, 'package.json'))(join(workspaceRoot, 'nx.json'));
     const inputs: unknown[] = nxJson.namedInputs?.sharedGlobals ?? [];
     return inputs
       .filter((i): i is string => typeof i === 'string' && i.startsWith('{workspaceRoot}/'))
@@ -465,12 +465,12 @@ function applyPackageRules(changes: ChangeSet, targets: LoadedTarget[]): void {
   }
 }
 
-function knownNpmPackages(root: string, manifestPaths: string[], changes: ChangeSet): Set<string> {
+function knownNpmPackages(workspaceRoot: string, manifestPaths: string[], changes: ChangeSet): Set<string> {
   const names = new Set(changes.npmPackages);
-  const require = createRequire(join(root, 'package.json'));
+  const require = createRequire(join(workspaceRoot, 'package.json'));
   for (const path of manifestPaths) {
     try {
-      const json = require(join(root, path));
+      const json = require(join(workspaceRoot, path));
       for (const field of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
         for (const name of Object.keys(json[field] ?? {})) names.add(name);
       }
