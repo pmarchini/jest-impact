@@ -5,7 +5,7 @@
   "patch": "synthetic-shared-jest-config.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
+    "widenedProjects": [
       "libs/importer/jest.config.js",
       "libs/components/jest.config.js"
     ],

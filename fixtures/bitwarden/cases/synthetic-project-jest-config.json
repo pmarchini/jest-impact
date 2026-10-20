@@ -5,7 +5,7 @@
   "patch": "synthetic-project-jest-config.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
+    "widenedProjects": [
       "libs/guid/jest.config.js"
     ]
   }

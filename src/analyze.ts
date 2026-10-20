@@ -71,7 +71,7 @@ type LoadedTarget = JestTarget & {
   config?: JestProjectConfig;
   configError?: string;
   tests: string[];
-  forced: Reason[];
+  widenReasons: Reason[];
   selected: Set<string>;
 };
 
@@ -171,7 +171,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       for (const file of affected) {
         for (const target of entries.get(file) ?? []) {
           if (target.tests.includes(file)) target.selected.add(file);
-          else target.forced.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(root, file) });
+          else target.widenReasons.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(root, file) });
         }
       }
     } finally {
@@ -181,14 +181,14 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
   }
 
   for (const target of targets) {
-    const all = report.runAll.length > 0 || target.forced.length > 0;
+    const all = report.runAll.length > 0 || target.widenReasons.length > 0;
     const tests = all ? target.tests : [...target.selected].sort();
     report.projects.push({
       project: target.project.name,
       target: target.target,
       configFile: target.configFile,
       run: all ? 'all' : tests.length > 0 ? 'some' : 'none',
-      reasons: report.runAll.length > 0 ? report.runAll : dedupeReasons(target.forced),
+      reasons: report.runAll.length > 0 ? report.runAll : dedupeReasons(target.widenReasons),
       tests: tests.map((t) => relative(root, t)),
       totalTests: target.tests.length,
     });
@@ -207,21 +207,21 @@ async function loadTargets(
   const evaluator = new ConfigEvaluator(CONFIG_FALLBACKS);
   const targets: LoadedTarget[] = [];
   for (const target of findJestTargets(root, files, projects)) {
-    const loaded: LoadedTarget = { ...target, tests: [], forced: [], selected: new Set() };
+    const loaded: LoadedTarget = { ...target, tests: [], widenReasons: [], selected: new Set() };
     try {
       const config = await loadJestProjectConfig(join(root, target.configFile), evaluator);
       loaded.config = config;
       loaded.tests = selectTestFiles(config, absoluteFiles);
       if (config.missingPackages.length > 0) {
-        loaded.forced.push({ rule: 'config-incomplete', detail: `config loads packages that are not installed: ${config.missingPackages.join(', ')}` });
+        loaded.widenReasons.push({ rule: 'config-incomplete', detail: `config loads packages that are not installed: ${config.missingPackages.join(', ')}` });
       }
       const resolverId = config.resolver && (/^[./]/.test(config.resolver) ? relative(root, resolve(config.rootDir, config.resolver)) : config.resolver);
       if (resolverId && !settings.safeResolvers.includes(resolverId)) {
-        loaded.forced.push({ rule: 'custom-resolver', detail: `custom Jest resolver ${resolverId}; add it to safeResolvers once its behaviour is covered` });
+        loaded.widenReasons.push({ rule: 'custom-resolver', detail: `custom Jest resolver ${resolverId}; add it to safeResolvers once its behaviour is covered` });
       }
     } catch (error) {
       loaded.configError = (error as Error).message;
-      loaded.forced.push({ rule: 'config-error', detail: `Jest config could not be loaded: ${loaded.configError}` });
+      loaded.widenReasons.push({ rule: 'config-error', detail: `Jest config could not be loaded: ${loaded.configError}` });
     }
     targets.push(loaded);
   }
@@ -272,7 +272,7 @@ function applyFileRules(
     const project = owningProject(path, projects);
     const owners = configInputOwners.get(path);
     if (owners) {
-      for (const target of owners) target.forced.push({ rule: 'config-input', detail: 'Jest config or setup file changed', file: path });
+      for (const target of owners) target.widenReasons.push({ rule: 'config-input', detail: 'Jest config or setup file changed', file: path });
       // The same file can also be imported by tests, in this project or another.
       if (CODE_EXTENSIONS.has(extname(path))) sovraChanges.add(path);
       continue;
@@ -291,12 +291,12 @@ function applyFileRules(
       continue;
     }
     if (project && PROJECT_CONFIG_FILES.some((glob) => micromatch.isMatch(base, glob, { dot: true }))) {
-      for (const target of targetsOf(project)) target.forced.push({ rule: 'project-config', detail: 'project config file changed', file: path });
+      for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'project-config', detail: 'project config file changed', file: path });
       if (base.startsWith('tsconfig')) {
         // Another project's tsconfig can extend this one.
         for (const extender of tsconfigExtenders(root, files, path)) {
           for (const target of targetsOf(owningProject(extender, projects))) {
-            if (target.project !== project) target.forced.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
+            if (target.project !== project) target.widenReasons.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
           }
         }
       }
@@ -312,7 +312,7 @@ function applyFileRules(
         // A user module mock is used only where a test calls jest.mock() on that module without a factory.
         for (const caller of mockCallers(root, mocked)) sovraChanges.add(caller);
       } else {
-        for (const target of targetsOf(project)) target.forced.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
+        for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
       }
       continue;
     }
@@ -353,7 +353,7 @@ function widenProject(
   files: string[],
   sovraChanges: Set<string>,
 ): void {
-  for (const target of targets) target.forced.push({ rule: 'non-code-change', detail, file });
+  for (const target of targets) target.widenReasons.push({ rule: 'non-code-change', detail, file });
   if (!project) return;
   const prefix = project.root === '.' ? '' : project.root + '/';
   for (const f of files) {
@@ -461,7 +461,7 @@ function applyPackageRules(changes: ChangeSet, targets: LoadedTarget[]): void {
   const changed = new Set(changes.npmPackages);
   for (const target of targets) {
     const hit = (target.config?.configPackages ?? []).filter((p) => changed.has(p));
-    if (hit.length > 0) target.forced.push({ rule: 'config-package', detail: `a package the Jest config loads changed: ${hit.join(', ')}` });
+    if (hit.length > 0) target.widenReasons.push({ rule: 'config-package', detail: `a package the Jest config loads changed: ${hit.join(', ')}` });
   }
 }
 

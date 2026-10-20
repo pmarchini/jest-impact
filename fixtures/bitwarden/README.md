@@ -9,7 +9,7 @@
 
 `trace.jsonl.gz` records, for every test file, the workspace modules Jest executed, the non-code files it read and the npm packages it loaded, from one full Jest run at the pinned commit (`validation/trace-jest.cjs`). Files ts-jest reads only to type-check are not counted.
 
-A test must be selected when it loaded a changed file or a changed package. Any such test left out fails the case, and so does any `expect` entry that does not hold: `runAll`, `wholeProjects`, `mustSelect`, `mustSkip`, `uncertain`, `maxAboveFloor`. The floor is what an empty change selects: tests reaching a file whose imports sovra cannot follow, which run on every change.
+A test must be selected when it loaded a changed file or a changed package. Any such test left out fails the case, and so does any `expect` entry that does not hold: `runAll`, `widenedProjects`, `mustSelect`, `mustSkip`, `uncertain`, `maxAboveFloor`. The floor is what an empty change selects: tests reaching a file whose imports sovra cannot follow, which run on every change.
 
 ## Running
 

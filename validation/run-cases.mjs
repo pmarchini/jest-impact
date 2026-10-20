@@ -9,7 +9,7 @@
 //   { "name", "category", "description",
 //     "commit": "<sha>"          // a real commit, replayed onto the snapshot, or
 //     "patch": "<file.patch>",   // a hand-written change, committed on the snapshot and reset afterwards
-//     "expect": { "runAll"?: bool, "wholeProjects"?: [config files], "mustSelect"?: [tests],
+//     "expect": { "runAll"?: bool, "widenedProjects"?: [config files], "mustSelect"?: [tests],
 //                 "mustSkip"?: [tests], "uncertain"?: [files], "maxAboveFloor"?: n } }
 //
 // The floor is what an empty change selects: tests that reach a file with
@@ -114,12 +114,12 @@ for (const c of cases) {
     aboveFloor: [...selected].filter((t) => !floor.has(t)).length,
     overSelected: selected.size - (mustRun.length - misses.length),
     runAll: report.runAll.map((r) => `${r.rule}: ${r.detail}`),
-    wholeProjects: report.projects.filter((p) => p.run === 'all').map((p) => `${p.configFile}: ${p.reasons.map((r) => r.rule).join(', ')}`),
+    widenedProjects: report.projects.filter((p) => p.run === 'all').map((p) => `${p.configFile}: ${p.reasons.map((r) => r.rule).join(', ')}`),
     ms: report.timings.totalMs,
   };
   results.push(result);
   console.log(
-    `${result.pass ? 'pass' : 'FAIL'} ${c.name.padEnd(36)} must=${String(result.mustRun).padStart(4)} selected=${String(result.selected).padStart(4)}/${total} (+${result.aboveFloor})${result.runAll.length ? ' ALL' : ''}${result.wholeProjects.length ? ` whole=${result.wholeProjects.length}` : ''}${dropped ? ` dropped=${dropped}` : ''}`,
+    `${result.pass ? 'pass' : 'FAIL'} ${c.name.padEnd(36)} must=${String(result.mustRun).padStart(4)} selected=${String(result.selected).padStart(4)}/${total} (+${result.aboveFloor})${result.runAll.length ? ' ALL' : ''}${result.widenedProjects.length ? ` widened=${result.widenedProjects.length}` : ''}${dropped ? ` dropped=${dropped}` : ''}`,
   );
   for (const f of failures.slice(0, 5)) console.log(`     ${f}`);
 }
@@ -132,7 +132,7 @@ function checkExpect(expect, report, selected, floor) {
   if (expect.runAll !== undefined && expect.runAll !== report.runAll.length > 0) {
     out.push(`expected runAll=${expect.runAll}, got ${report.runAll.length > 0}`);
   }
-  for (const config of expect.wholeProjects ?? []) {
+  for (const config of expect.widenedProjects ?? []) {
     if (report.projects.find((p) => p.configFile === config)?.run !== 'all') out.push(`expected the whole of ${config} to run`);
   }
   for (const test of expect.mustSelect ?? []) if (!selected.has(test)) out.push(`expected ${test} to be selected`);
