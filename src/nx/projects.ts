@@ -59,14 +59,16 @@ export function findJestTargets(workspaceRoot: string, files: string[], projects
   const targets: JestTarget[] = [];
   for (const configFile of candidates) {
     const project = owningProject(configFile, projects);
-    const target = project && (explicitJestTarget(workspaceRoot, project, configFile) ?? pluginTarget);
-    if (project && target) {
-      targets.push({ project, target, configFile });
-    } else {
-      // Still a Jest project (a root `jest` run picks it up through `projects`), so its tests count.
-      const root = posix.dirname(configFile);
-      targets.push({ project: { name: root, root, jestOnly: true }, target: '', configFile });
+    if (project) {
+      const target = explicitJestTarget(workspaceRoot, project, configFile) ?? pluginTarget;
+      if (target) {
+        targets.push({ project, target, configFile });
+        continue;
+      }
     }
+    // Still a Jest project (a root `jest` run picks it up through `projects`), so its tests count.
+    const root = posix.dirname(configFile);
+    targets.push({ project: { name: root, root, jestOnly: true }, target: '', configFile });
   }
   return targets;
 }

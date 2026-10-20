@@ -13,7 +13,9 @@ export function formatText(report: Report): string {
   }
   for (const project of report.projects) {
     if (project.run === 'none') continue;
-    lines.push(`${project.target ? `${project.project}:${project.target}` : `${project.configFile} (jest)`}  ${project.run === 'all' ? 'all' : project.tests.length} of ${project.totalTests}`);
+    const label = project.target ? `${project.project}:${project.target}` : `${project.configFile} (jest)`;
+    const count = project.run === 'all' ? 'all' : project.tests.length;
+    lines.push(`${label}  ${count} of ${project.totalTests}`);
     if (report.runAll.length === 0) for (const reason of project.reasons) lines.push(`  because ${describe(reason)}`);
     if (project.run === 'some') for (const test of project.tests) lines.push(`  ${test}`);
   }

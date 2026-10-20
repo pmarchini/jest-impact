@@ -98,7 +98,11 @@ Module._load = function (request, ...rest) {
     }
   }
   return new Proxy(loaded, {
-    get: (target, key) => (key === 'default' ? TracedRuntime : key === '__traced' ? true : target[key]),
+    get(target, key) {
+      if (key === 'default') return TracedRuntime;
+      if (key === '__traced') return true;
+      return target[key];
+    },
   });
 };
 

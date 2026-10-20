@@ -124,8 +124,9 @@ export function parseJsonc(text: string): any {
       while (i < text.length && text[i] !== '\n') i++;
       out += '\n';
     } else if (ch === '/' && text[i + 1] === '*') {
-      i = text.indexOf('*/', i + 2) + 1;
-      if (i === 0) break;
+      const end = text.indexOf('*/', i + 2);
+      if (end === -1) break;
+      i = end + 1;
     } else {
       out += ch;
     }
