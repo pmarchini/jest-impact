@@ -6,6 +6,7 @@ import micromatch from 'micromatch';
 import { getAffected } from 'sovra';
 import { collectChanges, type ChangeSet } from './changes.ts';
 import { resolveCommit, trackedFiles } from './git.ts';
+import { inDirectory } from './in-directory.ts';
 import { ConfigEvaluator } from './jest/evaluate.ts';
 import { CONFIG_FALLBACKS } from './jest/nx-preset.ts';
 import { loadJestProjectConfig, type JestProjectConfig } from './jest/project-config.ts';
@@ -13,10 +14,10 @@ import { selectTestFiles } from './jest/test-files.ts';
 import { findDynamicImports } from './dynamic-imports.ts';
 import { findReferences } from './references.ts';
 import { discoverProjects, findJestTargets, owningProject, type JestTarget, type NxProject } from './nx/projects.ts';
-import { buildResolverOptions, parseJsonc } from './resolver-options.ts';
+import { buildResolverOptions, parseJsonc, type ResolverSetup } from './resolver-options.ts';
 import { loadSettings, type Settings } from './settings.ts';
 import { parseSovraError, triage, type TriagedError } from './triage.ts';
-import { linkWorkspacePackages, workspacePackages, type LinkResult } from './workspace-linker.ts';
+import { linkWorkspacePackages, workspacePackages, type LinkResult, type WorkspacePackage } from './workspace-linker.ts';
 
 export type AnalyzeOptions = {
   workspaceRoot: string;
@@ -67,36 +68,97 @@ const CODE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '
 const PROJECT_CONFIG_FILES = ['tsconfig*.json', '.babelrc*', 'babel.config.*', '.swcrc', 'project.json', 'jest.config.*'];
 const REQUIRE_ALIASES = ['jest.mock', 'jest.doMock', 'jest.requireActual', 'jest.requireMock', 'jest.unstable_mockModule', 'jest.createMockFromModule', 'jest.setMock'];
 
+/** A Jest target with its loaded config and, as the rules run, what they decided for it. */
 type LoadedTarget = JestTarget & {
   config?: JestProjectConfig;
   configError?: string;
   tests: string[];
+  /** Why the whole target must run; empty when only `selected` runs. */
   widenReasons: Reason[];
   selected: Set<string>;
 };
 
+/** Everything about the checkout at head that the change rules consult. */
+type Workspace = {
+  workspaceRoot: string;
+  settings: Settings;
+  /** Tracked files, relative to the workspace root. */
+  files: string[];
+  projects: NxProject[];
+  packages: WorkspacePackage[];
+  targets: LoadedTarget[];
+  resolver: ResolverSetup;
+  link?: LinkResult;
+  warnings: string[];
+};
+
+/**
+ * Lists the tests each Jest target must run for the changes between base and head.
+ *
+ * Two effects a caller should know about: unless `link` is false, workspace
+ * packages are symlinked into the workspace's node_modules so sovra can resolve
+ * them, and sovra runs with the workspace root as the process cwd, so two
+ * analyses must not overlap in one process.
+ */
 export async function analyze(options: AnalyzeOptions): Promise<Report> {
   const started = performance.now();
+  const base = resolveCommit(options.workspaceRoot, options.base);
+  const head = resolveCommit(options.workspaceRoot, options.head);
+  const workspace = await loadWorkspace(options);
+  const { workspaceRoot, settings, targets } = workspace;
+
+  const manifestPaths = ['package.json', ...workspace.packages.map((p) => `${p.root}/package.json`)];
+  const changes = options.changeSet ?? collectChanges(workspaceRoot, base, head, manifestPaths);
+
+  // The root manifest is often in sharedGlobals, but globalTriggers reads its diff field by field instead.
+  const sharedGlobals = nxSharedGlobals(workspaceRoot).filter((f) => f !== 'package.json');
+  const runAll = globalTriggers(changes, { ...settings, globalFiles: [...settings.globalFiles, ...sharedGlobals] });
+
+  let ignoredFiles: string[] = [];
+  let sovra: SovraOutcome = { affected: [], uncertainFiles: [], ignoredErrors: 0, sovraMs: 0 };
+  if (runAll.length === 0) {
+    const classified = classifyChanges(workspace, changes);
+    ignoredFiles = classified.ignoredFiles;
+    applyPackageRules(changes, targets);
+
+    const entries = targetsByEntryFile(targets);
+    sovra = await askSovra(workspace, changes, classified.sovraChanges, [...entries.keys()], manifestPaths);
+    if (sovra.globalError) runAll.push({ rule: 'sovra-error', detail: sovra.globalError });
+    markAffected(workspaceRoot, entries, sovra.affected);
+  }
+
+  return {
+    base,
+    head,
+    runAll,
+    projects: targets.map((target) => targetResult(target, runAll, workspaceRoot)),
+    changes: { files: changes.files.length, npmPackages: changes.npmPackages, lockfile: changes.lockfile, ignoredFiles },
+    uncertainFiles: sovra.uncertainFiles,
+    ignoredErrors: sovra.ignoredErrors,
+    link: workspace.link && { linked: workspace.link.linked.length, present: workspace.link.present.length },
+    warnings: workspace.warnings,
+    timings: { totalMs: Math.round(performance.now() - started), sovraMs: sovra.sovraMs },
+  };
+}
+
+async function loadWorkspace(options: AnalyzeOptions): Promise<Workspace> {
   const workspaceRoot = resolve(options.workspaceRoot);
   const settings = options.settings ?? loadSettings(workspaceRoot);
-  const base = resolveCommit(workspaceRoot, options.base);
-  const head = resolveCommit(workspaceRoot, options.head);
-  const warnings: string[] = [];
-
   const files = trackedFiles(workspaceRoot);
-  const absoluteFiles = files.map((f) => join(workspaceRoot, f));
   const projects = discoverProjects(workspaceRoot, files, options.nxGraph);
   const packages = workspacePackages(workspaceRoot, files);
-  let link: LinkResult | undefined;
-  if (options.link !== false) link = linkWorkspacePackages(workspaceRoot, packages);
-  const targets = await loadTargets(workspaceRoot, files, absoluteFiles, projects, settings);
+  const link = options.link === false ? undefined : linkWorkspacePackages(workspaceRoot, packages);
+
+  const targets = await loadTargets(workspaceRoot, files, projects, settings);
   for (const target of targets) if (target.project.jestOnly) projects.push(target.project);
+  const warnings: string[] = [];
   const jestOnly = targets.filter((t) => t.project.jestOnly).map((t) => t.configFile);
   if (jestOnly.length > 0) warnings.push(`${jestOnly.length} Jest configs belong to no Nx project and are reported as plain Jest runs: ${jestOnly.join(', ')}`);
 
   const configs = targets.flatMap((t) => (t.config ? [t.config] : []));
   const resolver = buildResolverOptions(workspaceRoot, configs, settings.conditionNames);
   warnings.push(...resolver.warnings);
+
   // sovra cannot apply these mappings, so it follows the import to the real module. The
   // mapped file is loaded in that project instead: it widens the project like a setup file.
   for (const config of configs) {
@@ -106,104 +168,16 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
     }
   }
 
-  const manifestPaths = ['package.json', ...packages.map((p) => `${p.root}/package.json`)];
-  const changes = options.changeSet ?? collectChanges(workspaceRoot, base, head, manifestPaths);
-  const report: Report = {
-    base,
-    head,
-    runAll: [],
-    projects: [],
-    changes: { files: changes.files.length, npmPackages: changes.npmPackages, lockfile: changes.lockfile, ignoredFiles: [] },
-    uncertainFiles: [],
-    ignoredErrors: 0,
-    link: link && { linked: link.linked.length, present: link.present.length },
-    warnings,
-    timings: { totalMs: 0, sovraMs: 0 },
-  };
-
-  // The root manifest is often in sharedGlobals, but its diff is already read field by field below.
-  const sharedGlobals = nxSharedGlobals(workspaceRoot).filter((f) => f !== 'package.json');
-  report.runAll = globalTriggers(changes, { ...settings, globalFiles: [...settings.globalFiles, ...sharedGlobals] });
-  const sovraChanges = new Set<string>();
-  if (report.runAll.length === 0) {
-    applyFileRules(workspaceRoot, files, changes, targets, projects, settings, sovraChanges, report);
-    applyPackageRules(changes, targets);
-
-    const entries = new Map<string, LoadedTarget[]>();
-    const add = (file: string, target: LoadedTarget) => entries.set(file, [...(entries.get(file) ?? []), target]);
-    for (const target of targets) {
-      for (const test of target.tests) add(test, target);
-      for (const input of target.config?.runtimeInputs ?? []) if (CODE_EXTENSIONS.has(extname(input))) add(input, target);
-    }
-    const changeList = [...sovraChanges, ...changes.npmPackages.map((n) => `npm:${n}`)];
-
-    const sovraStart = performance.now();
-    const previousCwd = process.cwd();
-    process.chdir(workspaceRoot);
-    try {
-      const run = (list: string[]) => getAffected([...entries.keys()], list, resolver.options, false, REQUIRE_ALIASES);
-      const first = run(changeList.length > 0 ? changeList : ['file:.jest-impact-no-change']);
-      const triaged = first.errors.map((e) =>
-        triage(parseSovraError(e), {
-          workspacePackages: new Set(packages.map((p) => p.name)),
-          npmPackages: knownNpmPackages(workspaceRoot, manifestPaths, changes),
-          unmappedPatterns: [...resolver.unmappedPatterns.values()].flat(),
-        }),
-      );
-      report.ignoredErrors = triaged.filter((t) => t.verdict === 'ignore').length;
-      const global = triaged.find((t) => t.verdict === 'global');
-      if (global) report.runAll.push({ rule: 'sovra-error', detail: global.reason });
-      const dynamicImports = findDynamicImports(workspaceRoot).map((file): TriagedError => ({
-        kind: 'dynamic',
-        file,
-        line: 0,
-        message: 'import() with a non-literal argument',
-        code: '',
-        verdict: 'uncertain',
-        reason: 'import() with a non-literal argument',
-      }));
-      report.uncertainFiles = groupUncertain([...triaged, ...dynamicImports]).filter((u) => !micromatch.isMatch(u.file, settings.trustedFiles));
-
-      let affected = changeList.length > 0 ? first.files : [];
-      if (report.uncertainFiles.length > 0) {
-        affected = run([...changeList, ...report.uncertainFiles.map((u) => u.file)]).files;
-      }
-      for (const file of affected) {
-        for (const target of entries.get(file) ?? []) {
-          if (target.tests.includes(file)) target.selected.add(file);
-          else target.widenReasons.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(workspaceRoot, file) });
-        }
-      }
-    } finally {
-      process.chdir(previousCwd);
-      report.timings.sovraMs = Math.round(performance.now() - sovraStart);
-    }
-  }
-
-  for (const target of targets) {
-    const all = report.runAll.length > 0 || target.widenReasons.length > 0;
-    const tests = all ? target.tests : [...target.selected].sort();
-    report.projects.push({
-      project: target.project.name,
-      target: target.target,
-      configFile: target.configFile,
-      run: all ? 'all' : tests.length > 0 ? 'some' : 'none',
-      reasons: report.runAll.length > 0 ? report.runAll : dedupeReasons(target.widenReasons),
-      tests: tests.map((t) => relative(workspaceRoot, t)),
-      totalTests: target.tests.length,
-    });
-  }
-  report.timings.totalMs = Math.round(performance.now() - started);
-  return report;
+  return { workspaceRoot, settings, files, projects, packages, targets, resolver, link, warnings };
 }
 
 async function loadTargets(
   workspaceRoot: string,
   files: string[],
-  absoluteFiles: string[],
   projects: NxProject[],
   settings: Settings,
 ): Promise<LoadedTarget[]> {
+  const absoluteFiles = files.map((f) => join(workspaceRoot, f));
   const evaluator = new ConfigEvaluator(CONFIG_FALLBACKS);
   const targets: LoadedTarget[] = [];
   for (const target of findJestTargets(workspaceRoot, files, projects)) {
@@ -245,20 +219,20 @@ function globalTriggers(changes: ChangeSet, settings: Settings): Reason[] {
   return reasons;
 }
 
+type ClassifiedChanges = {
+  /** Paths sovra starts from: changed code, and the code a non-code change stands for. */
+  sovraChanges: Set<string>;
+  /** Changed files that can affect no test. */
+  ignoredFiles: string[];
+};
+
 /**
  * Decides what each changed file means before the import graph is asked:
- * code goes to sovra, config and non-code files widen their project.
+ * code goes to sovra, config and non-code files widen their project. Widening
+ * is recorded on the targets, as is the test a changed snapshot belongs to.
  */
-function applyFileRules(
-  workspaceRoot: string,
-  files: string[],
-  changes: ChangeSet,
-  targets: LoadedTarget[],
-  projects: NxProject[],
-  settings: Settings,
-  sovraChanges: Set<string>,
-  report: Report,
-): void {
+function classifyChanges(workspace: Workspace, changes: ChangeSet): ClassifiedChanges {
+  const { workspaceRoot, files, projects, settings, targets } = workspace;
   const configInputOwners = new Map<string, LoadedTarget[]>();
   for (const target of targets) {
     for (const input of [...(target.config?.configModules ?? []), ...(target.config?.runtimeInputs ?? [])]) {
@@ -268,40 +242,47 @@ function applyFileRules(
   }
   const targetsOf = (project: NxProject | undefined) => targets.filter((t) => t.project === project);
 
-  for (const { path } of changes.files) {
+  const sovraChanges = new Set<string>();
+  const ignoredFiles: string[] = [];
+  const widen = (project: NxProject | undefined, file: string, detail: string) => {
+    for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'non-code-change', detail, file });
+    for (const code of projectCode(project, files)) sovraChanges.add(code);
+  };
+
+  const classify = (path: string): void => {
     const project = owningProject(path, projects);
+    const base = posix.basename(path);
+
     const owners = configInputOwners.get(path);
     if (owners) {
       for (const target of owners) target.widenReasons.push({ rule: 'config-input', detail: 'Jest config or setup file changed', file: path });
       // The same file can also be imported by tests, in this project or another.
       if (CODE_EXTENSIONS.has(extname(path))) sovraChanges.add(path);
-      continue;
+      return;
     }
+
     if (micromatch.isMatch(path, settings.ignoredFiles, { dot: true })) {
-      report.changes.ignoredFiles.push(path);
-      continue;
+      ignoredFiles.push(path);
+      return;
     }
-    const base = posix.basename(path);
+
     if (base === 'package.json') {
       // Code can import a manifest (`require('../package.json').version`), so its importers run on any edit.
       sovraChanges.add(path);
       const manifest = changes.manifests.find((m) => m.path === path);
-      if (manifest && !manifest.otherFields) continue;
-      widenProject(project, targetsOf(project), path, 'package.json changed beyond dependency ranges', files, sovraChanges);
-      continue;
+      if (manifest && !manifest.otherFields) return;
+      widen(project, path, 'package.json changed beyond dependency ranges');
+      return;
     }
+
     if (project && PROJECT_CONFIG_FILES.some((glob) => micromatch.isMatch(base, glob, { dot: true }))) {
       for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'project-config', detail: 'project config file changed', file: path });
-      if (base.startsWith('tsconfig')) {
-        // Another project's tsconfig can extend this one.
-        for (const extender of tsconfigExtenders(workspaceRoot, files, path)) {
-          for (const target of targetsOf(owningProject(extender, projects))) {
-            if (target.project !== project) target.widenReasons.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
-          }
-        }
+      for (const [target, extender] of extendingTargets(workspace, path, project)) {
+        target.widenReasons.push({ rule: 'project-config', detail: `extends a tsconfig that changed (${extender})`, file: path });
       }
-      continue;
+      return;
     }
+
     if (path.split('/').includes('__mocks__')) {
       sovraChanges.add(path);
       const mocked = mockedModule(workspaceRoot, path, targets);
@@ -314,51 +295,163 @@ function applyFileRules(
       } else {
         for (const target of targetsOf(project)) target.widenReasons.push({ rule: 'manual-mock', detail: 'a __mocks__ file changed; Jest loads these implicitly', file: path });
       }
-      continue;
+      return;
     }
+
+    // A snapshot selects its test. One whose test is gone is an ordinary non-code file.
     if (path.endsWith('.snap') && posix.basename(posix.dirname(path)) === '__snapshots__') {
       const testFile = join(workspaceRoot, posix.dirname(posix.dirname(path)), base.slice(0, -'.snap'.length));
       const owners = targets.filter((t) => t.tests.includes(testFile));
       for (const target of owners) target.selected.add(testFile);
-      if (owners.length > 0) continue;
+      if (owners.length > 0) return;
     }
+
     if (CODE_EXTENSIONS.has(extname(path))) {
       sovraChanges.add(path);
-      continue;
+      return;
     }
+
     if (!project) {
-      report.changes.ignoredFiles.push(path);
-      continue;
+      ignoredFiles.push(path);
+      return;
     }
+
     // A file named by the code that loads it (a template, an imported JSON) affects
     // that code's importers. One nothing names may be read by any code in its project.
     const references = findReferences(workspaceRoot, path);
     if (references.length > 0) {
       for (const reference of references) sovraChanges.add(reference);
-      continue;
+      return;
     }
-    widenProject(project, targetsOf(project), path, 'non-code file changed; it may be read at runtime', files, sovraChanges);
-  }
+    widen(project, path, 'non-code file changed; it may be read at runtime');
+  };
+
+  for (const { path } of changes.files) classify(path);
+  return { sovraChanges, ignoredFiles };
 }
 
 /**
- * A change sovra cannot see inside a project: run the project's own tests and
- * treat its code as changed, so tests in other projects that import it run too.
+ * A project's code counts as changed when sovra cannot see the change itself,
+ * so tests in other projects that import the project run too.
  */
-function widenProject(
-  project: NxProject | undefined,
-  targets: LoadedTarget[],
-  file: string,
-  detail: string,
-  files: string[],
-  sovraChanges: Set<string>,
-): void {
-  for (const target of targets) target.widenReasons.push({ rule: 'non-code-change', detail, file });
-  if (!project) return;
+function projectCode(project: NxProject | undefined, files: string[]): string[] {
+  if (!project) return [];
   const prefix = project.root === '.' ? '' : project.root + '/';
-  for (const f of files) {
-    if (f.startsWith(prefix) && CODE_EXTENSIONS.has(extname(f))) sovraChanges.add(f);
+  return files.filter((f) => f.startsWith(prefix) && CODE_EXTENSIONS.has(extname(f)));
+}
+
+/** Targets of other projects whose tsconfig extends `changed`, each with the extending tsconfig. */
+function extendingTargets(workspace: Workspace, changed: string, project: NxProject): Array<[LoadedTarget, string]> {
+  if (!posix.basename(changed).startsWith('tsconfig')) return [];
+  const pairs: Array<[LoadedTarget, string]> = [];
+  for (const extender of tsconfigExtenders(workspace.workspaceRoot, workspace.files, changed)) {
+    const owner = owningProject(extender, workspace.projects);
+    if (owner === project) continue;
+    for (const target of workspace.targets) if (target.project === owner) pairs.push([target, extender]);
   }
+  return pairs;
+}
+
+type SovraOutcome = {
+  /** Entry files that reach a change: tests to select, runtime inputs that widen their target. */
+  affected: string[];
+  uncertainFiles: Report['uncertainFiles'];
+  ignoredErrors: number;
+  /** An error after which the graph cannot be trusted at all. */
+  globalError?: string;
+  sovraMs: number;
+};
+
+/** sovra rejects an empty change list; a file that does not exist changes nothing. */
+const NO_CHANGE = 'file:.jest-impact-no-change';
+
+/**
+ * Asks sovra which entry files reach a change. Runs with the workspace root as cwd, which sovra's
+ * resolver needs.
+ */
+async function askSovra(
+  workspace: Workspace,
+  changes: ChangeSet,
+  sovraChanges: Set<string>,
+  entryFiles: string[],
+  manifestPaths: string[],
+): Promise<SovraOutcome> {
+  const { workspaceRoot, settings, resolver, packages } = workspace;
+  const changeList = [...sovraChanges, ...changes.npmPackages.map((n) => `npm:${n}`)];
+  const started = performance.now();
+
+  return inDirectory(workspaceRoot, () => {
+    const run = (list: string[]) => getAffected(entryFiles, list, resolver.options, false, REQUIRE_ALIASES);
+    const first = run(changeList.length > 0 ? changeList : [NO_CHANGE]);
+
+    const triaged = first.errors.map((e) =>
+      triage(parseSovraError(e), {
+        workspacePackages: new Set(packages.map((p) => p.name)),
+        npmPackages: knownNpmPackages(workspaceRoot, manifestPaths, changes),
+        unmappedPatterns: [...resolver.unmappedPatterns.values()].flat(),
+      }),
+    );
+    const uncertainFiles = groupUncertain([...triaged, ...dynamicImportErrors(workspaceRoot)]).filter((u) => !micromatch.isMatch(u.file, settings.trustedFiles));
+
+    // Files whose imports sovra could not follow count as changed, so every test reaching them runs.
+    let affected = changeList.length > 0 ? first.files : [];
+    if (uncertainFiles.length > 0) affected = run([...changeList, ...uncertainFiles.map((u) => u.file)]).files;
+
+    return {
+      affected,
+      uncertainFiles,
+      ignoredErrors: triaged.filter((t) => t.verdict === 'ignore').length,
+      globalError: triaged.find((t) => t.verdict === 'global')?.reason,
+      sovraMs: Math.round(performance.now() - started),
+    };
+  });
+}
+
+/** Every file sovra starts from, with the targets it belongs to. */
+function targetsByEntryFile(targets: LoadedTarget[]): Map<string, LoadedTarget[]> {
+  const byFile = new Map<string, LoadedTarget[]>();
+  const add = (file: string, target: LoadedTarget) => byFile.set(file, [...(byFile.get(file) ?? []), target]);
+  for (const target of targets) {
+    for (const test of target.tests) add(test, target);
+    for (const input of target.config?.runtimeInputs ?? []) if (CODE_EXTENSIONS.has(extname(input))) add(input, target);
+  }
+  return byFile;
+}
+
+/** An affected test is selected; an affected runtime input widens its target. */
+function markAffected(workspaceRoot: string, byFile: Map<string, LoadedTarget[]>, affected: string[]): void {
+  for (const file of affected) {
+    for (const target of byFile.get(file) ?? []) {
+      if (target.tests.includes(file)) target.selected.add(file);
+      else target.widenReasons.push({ rule: 'config-input-affected', detail: 'a setup file or config module imports a change', file: relative(workspaceRoot, file) });
+    }
+  }
+}
+
+function dynamicImportErrors(workspaceRoot: string): TriagedError[] {
+  return findDynamicImports(workspaceRoot).map((file) => ({
+    kind: 'dynamic',
+    file,
+    line: 0,
+    message: 'import() with a non-literal argument',
+    code: '',
+    verdict: 'uncertain',
+    reason: 'import() with a non-literal argument',
+  }));
+}
+
+function targetResult(target: LoadedTarget, runAll: Reason[], workspaceRoot: string): ProjectResult {
+  const all = runAll.length > 0 || target.widenReasons.length > 0;
+  const tests = all ? target.tests : [...target.selected].sort();
+  return {
+    project: target.project.name,
+    target: target.target,
+    configFile: target.configFile,
+    run: all ? 'all' : tests.length > 0 ? 'some' : 'none',
+    reasons: runAll.length > 0 ? runAll : dedupeReasons(target.widenReasons),
+    tests: tests.map((t) => relative(workspaceRoot, t)),
+    totalTests: target.tests.length,
+  };
 }
 
 /**
