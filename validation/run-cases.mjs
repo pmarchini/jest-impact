@@ -63,31 +63,7 @@ console.log(`floor: ${floor.size} tests run on every change`);
 
 const results = [];
 for (const c of cases) {
-  let changeSet;
-  let dropped = 0;
-  let patchFile;
-  if (c.commit) {
-    const full = collectChanges(workspaceRoot, `${c.commit}~1`, c.commit, manifestPaths);
-    const files = full.files
-      .filter((f) => atSnapshot.has(f.path) || (dropped++, false))
-      .map((f) => ({ path: f.path, status: 'modified' }));
-    changeSet = { ...full, files };
-  } else {
-    // The patch is committed on a detached HEAD, so the analyzer diffs it exactly as CI would.
-    patchFile = resolve(casesDir, c.patch);
-    git('apply', '--index', patchFile);
-    git('-c', 'user.name=jest-impact', '-c', 'user.email=cases@jest-impact', 'commit', '-q', '--no-verify', '-m', c.name);
-  }
-
-  let report;
-  try {
-    report = changeSet
-      ? await analyze({ workspaceRoot, base: snapshot, head: snapshot, changeSet })
-      : await analyze({ workspaceRoot, base: snapshot, head: 'HEAD' });
-    changeSet ??= collectChanges(workspaceRoot, snapshot, 'HEAD', manifestPaths);
-  } finally {
-    if (patchFile) git('reset', '-q', '--hard', snapshot);
-  }
+  const { report, changeSet, dropped } = c.commit ? await replayCommit(c) : await applyPatch(c);
 
   const changed = new Set(changeSet.files.map((f) => f.path));
   const changedPackages = new Set([...(changeSet.lockfile?.changedPackages ?? []), ...changeSet.manifests.flatMap((m) => m.dependencies)]);
@@ -144,3 +120,25 @@ function checkExpect(expect, report, selected, floor) {
   return out;
 }
 
+
+/** A real commit's changes, taken as a change set at the snapshot. Paths that do not exist there are dropped. */
+async function replayCommit(c) {
+  const full = collectChanges(workspaceRoot, `${c.commit}~1`, c.commit, manifestPaths);
+  const files = full.files.filter((f) => atSnapshot.has(f.path)).map((f) => ({ path: f.path, status: 'modified' }));
+  const changeSet = { ...full, files };
+  const report = await analyze({ workspaceRoot, base: snapshot, head: snapshot, changeSet });
+  return { report, changeSet, dropped: full.files.length - files.length };
+}
+
+/** A hand-written patch, committed on the detached HEAD so the analyzer diffs it exactly as CI would, then reset. */
+async function applyPatch(c) {
+  git('apply', '--index', resolve(casesDir, c.patch));
+  git('-c', 'user.name=jest-impact', '-c', 'user.email=cases@jest-impact', 'commit', '-q', '--no-verify', '-m', c.name);
+  try {
+    const report = await analyze({ workspaceRoot, base: snapshot, head: 'HEAD' });
+    const changeSet = collectChanges(workspaceRoot, snapshot, 'HEAD', manifestPaths);
+    return { report, changeSet, dropped: 0 };
+  } finally {
+    git('reset', '-q', '--hard', snapshot);
+  }
+}
