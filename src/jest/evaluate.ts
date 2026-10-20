@@ -15,6 +15,7 @@ import { transform } from 'sucrase';
  * caller knows the config may be incomplete.
  */
 export class ConfigEvaluator {
+  /** Packages stubbed while loading the current config. loadConfig starts a new set. */
   readonly missingPackages = new Set<string>();
   private readonly cache = new Map<string, unknown>();
   /** Local files and package names each evaluated file required. */
@@ -28,11 +29,12 @@ export class ConfigEvaluator {
 
   /** Loads a config file and resolves a function or promise export to a plain object. */
   async loadConfig(file: string): Promise<Record<string, unknown>> {
+    // A shared module can compute its exports from process.cwd(), so another config's copy is stale.
+    this.cache.clear();
+    this.missingPackages.clear();
     if (file.endsWith('.json')) {
       return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
     }
-    // A shared module can compute its exports from process.cwd(), so another config's copy is stale.
-    this.cache.clear();
     let value = this.loadModule(file);
     value = interopDefault(value);
     if (typeof value === 'function') {
@@ -135,7 +137,7 @@ export class ConfigEvaluator {
         return createRequire(file).resolve(specifier, options);
       } catch {
         this.missingPackages.add(packageName(specifier));
-        return join(dirname(file), 'node_modules', specifier);
+        return stubbedPackagePath(file, specifier);
       }
     };
     const wrapper = vm.runInThisContext(
@@ -210,4 +212,13 @@ function missingModuleStub(): unknown {
   };
   const stub: unknown = new Proxy(target, handler);
   return stub;
+}
+
+/**
+ * Where a package that is not installed would have been. Config code passes
+ * require.resolve() results on as paths (to transforms, to path.join), so a
+ * plausible path keeps it running; missingPackages records that it is made up.
+ */
+function stubbedPackagePath(fromFile: string, specifier: string): string {
+  return join(dirname(fromFile), 'node_modules', specifier);
 }
