@@ -2,7 +2,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { analyze } from './analyze.ts';
+import { analyze, type Report } from './analyze.ts';
 import { repoRoot } from './git.ts';
 import { formatGitlabPipeline, formatNxCommands, formatText, writeTestLists } from './output.ts';
 
@@ -55,16 +55,22 @@ async function main(): Promise<number> {
   });
   if (values.json) writeFileSync(values.json, JSON.stringify(report, null, 2) + '\n');
   if (values['out-dir']) writeTestLists(report, workspaceRoot, resolve(values['out-dir']));
-  const output =
-    values.format === 'json'
-      ? JSON.stringify(report, null, 2)
-      : values.format === 'nx'
-        ? formatNxCommands(report, workspaceRoot)
-        : values.format === 'gitlab'
-          ? formatGitlabPipeline(report, { include: values['gitlab-include'], extends: values['gitlab-extends'] })
-          : formatText(report);
+  const output = formatReport(report, values, workspaceRoot);
   if (output) process.stdout.write(output + '\n');
   return 0;
+}
+
+function formatReport(report: Report, values: { format?: string; 'gitlab-include'?: string[]; 'gitlab-extends'?: string }, workspaceRoot: string): string {
+  switch (values.format) {
+    case 'json':
+      return JSON.stringify(report, null, 2);
+    case 'nx':
+      return formatNxCommands(report, workspaceRoot);
+    case 'gitlab':
+      return formatGitlabPipeline(report, { include: values['gitlab-include'], extends: values['gitlab-extends'] });
+    default:
+      return formatText(report);
+  }
 }
 
 main().then(

@@ -64,13 +64,29 @@ function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
-/** Commits `files` on top of the base commit and analyzes that commit. */
-async function analyzeChange(files: Record<string, string>): Promise<Report> {
-  git('checkout', '-q', '--detach', 'base');
+/** Commits `files` on top of the current HEAD. */
+function commit(files: Record<string, string>): void {
   write(files);
   git('add', '-A');
   git('commit', '-q', '-m', 'change');
+}
+
+/** Commits `files` on top of the base commit. */
+function commitOnBase(files: Record<string, string>): void {
+  git('checkout', '-q', '--detach', 'base');
+  commit(files);
+}
+
+/** Commits `files` on top of the base commit and analyzes that commit. */
+async function analyzeChange(files: Record<string, string>): Promise<Report> {
+  commitOnBase(files);
   return analyze({ workspaceRoot: root, base: 'base', head: 'HEAD' });
+}
+
+/** Analyzes the commit on top of the one `commitOnBase` made. */
+async function analyzeNextCommit(files: Record<string, string>): Promise<Report> {
+  commit(files);
+  return analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
 }
 
 function selected(report: Report): Record<string, string[] | 'all'> {
@@ -135,60 +151,56 @@ describe('analyze', () => {
   });
 
   it('counts a Jest config that no Nx project contains', async () => {
-    await analyzeChange({
+    commitOnBase({
       'tools/check/jest.config.js': 'module.exports = {};\n',
       'tools/check/check.spec.ts': "import { sum } from '@acme/utils';\ntest('check', () => expect(sum(1, 1)).toBe(2));\n",
     });
-    write({ 'libs/utils/src/sum.ts': 'export const sum = (a: number, b: number) => b + a;\n' });
-    git('commit', '-q', '-am', 'change sum');
-    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+
+    const report = await analyzeNextCommit({ 'libs/utils/src/sum.ts': 'export const sum = (a: number, b: number) => b + a;\n' });
     assert.deepEqual(selected(report)['tools/check'], ['tools/check/check.spec.ts']);
     assert.equal(report.projects.find((p) => p.project === 'tools/check')?.target, '');
   });
 
   it('runs importers of a package.json when only its version changes', async () => {
-    await analyzeChange({
+    commitOnBase({
       'libs/ui/src/version.ts': "export const version: string = require('../package.json').version;\n",
       'libs/ui/src/version.spec.ts': "import { version } from './version';\ntest('version', () => expect(version).toBeDefined());\n",
     });
-    write({ 'libs/ui/package.json': JSON.stringify({ name: '@acme/ui', version: '1.0.1', dependencies: { '@acme/utils': '*' } }) });
-    git('commit', '-q', '-am', 'bump ui');
-    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+
+    const report = await analyzeNextCommit({ 'libs/ui/package.json': JSON.stringify({ name: '@acme/ui', version: '1.0.1', dependencies: { '@acme/utils': '*' } }) });
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/version.spec.ts'] });
   });
 
   it('selects importers of the code that names a changed template, not the whole project', async () => {
-    await analyzeChange({ 'libs/ui/src/button.ts': "import { sum } from '@acme/utils';\nexport const templateUrl = './button.html';\nexport const width = () => sum(1, 1);\n" });
-    write({ 'libs/ui/src/button.html': '<button class="wide"></button>\n' });
-    git('commit', '-q', '-am', 'restyle button');
-    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+    commitOnBase({ 'libs/ui/src/button.ts': "import { sum } from '@acme/utils';\nexport const templateUrl = './button.html';\nexport const width = () => sum(1, 1);\n" });
+
+    const report = await analyzeNextCommit({ 'libs/ui/src/button.html': '<button class="wide"></button>\n' });
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/button.spec.ts'] });
   });
 
   it('selects only the tests that jest.mock a module when its __mocks__ file changes', async () => {
-    await analyzeChange({
+    commitOnBase({
       'libs/ui/src/__mocks__/label.ts': "export const label = 'mock';\n",
       'libs/ui/src/label-mocked.spec.ts': "jest.mock('./label');\nimport { label } from './label';\ntest('mocked', () => expect(label).toBe('mock'));\n",
     });
-    write({ 'libs/ui/src/__mocks__/label.ts': "export const label = 'mocked';\n" });
-    git('commit', '-q', '-am', 'change mock');
-    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+
+    const report = await analyzeNextCommit({ 'libs/ui/src/__mocks__/label.ts': "export const label = 'mocked';\n" });
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/label-mocked.spec.ts'] });
   });
 
   it('runs projects whose tsconfig extends a changed tsconfig in another project', async () => {
-    await analyzeChange({
+    commitOnBase({
       'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: true } }),
       'libs/ui/tsconfig.json': JSON.stringify({ extends: '../utils/tsconfig.json' }),
     });
-    write({ 'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: false } }) });
-    git('commit', '-q', '-am', 'loosen utils');
-    const report = await analyze({ workspaceRoot: root, base: 'HEAD~1', head: 'HEAD' });
+
+    const report = await analyzeNextCommit({ 'libs/utils/tsconfig.json': JSON.stringify({ compilerOptions: { strict: false } }) });
     assert.deepEqual(selected(report), { utils: 'all', ui: 'all' });
   });
 
   it('always runs tests that reach a dynamic require, even when nothing they import changed', async () => {
-    await analyzeChange({ 'libs/ui/src/label.ts': "export const label = require(process.env.LABEL ?? './x');\n" });
+    commitOnBase({ 'libs/ui/src/label.ts': "export const label = require(process.env.LABEL ?? './x');\n" });
+
     const report = await analyze({ workspaceRoot: root, base: 'HEAD', head: 'HEAD' });
     assert.deepEqual(report.uncertainFiles.map((u) => u.file), ['libs/ui/src/label.ts']);
     assert.deepEqual(selected(report), { utils: [], ui: ['libs/ui/src/label.spec.ts'] });

@@ -5,7 +5,7 @@
   "patch": "synthetic-extended-tsconfig.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
+    "widenedProjects": [
       "apps/web/jest.config.js",
       "bitwarden_license/bit-web/jest.config.js"
     ]

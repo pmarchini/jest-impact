@@ -5,7 +5,7 @@
   "patch": "synthetic-mapper-target.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
+    "widenedProjects": [
       "apps/web/jest.config.js",
       "apps/cli/jest.config.js",
       "bitwarden_license/bit-cli/jest.config.js"

@@ -13,16 +13,16 @@ function git(cwd: string, args: string[]): string {
   });
 }
 
-export function resolveCommit(cwd: string, ref: string): string {
-  return git(cwd, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
+export function resolveCommit(workspaceRoot: string, ref: string): string {
+  return git(workspaceRoot, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
 }
 
 /**
  * Files that differ between base and head. Renames are reported as a deletion
  * plus an addition so both paths count as changed.
  */
-export function changedFiles(cwd: string, base: string, head: string): ChangedFile[] {
-  const out = git(cwd, ['diff', '--name-status', '--no-renames', '-z', base, head]);
+export function changedFiles(workspaceRoot: string, base: string, head: string): ChangedFile[] {
+  const out = git(workspaceRoot, ['diff', '--name-status', '--no-renames', '-z', base, head]);
   const parts = out.split('\0').filter(Boolean);
   const files: ChangedFile[] = [];
   for (let i = 0; i + 1 < parts.length; i += 2) {
@@ -35,15 +35,15 @@ export function changedFiles(cwd: string, base: string, head: string): ChangedFi
 }
 
 /** Tracked files at the current checkout, relative to the repo root. */
-export function trackedFiles(cwd: string): string[] {
-  return git(cwd, ['ls-files', '-z']).split('\0').filter(Boolean);
+export function trackedFiles(workspaceRoot: string): string[] {
+  return git(workspaceRoot, ['ls-files', '-z']).split('\0').filter(Boolean);
 }
 
 /** File content at a commit, or undefined when the file does not exist there. */
-export function showFile(cwd: string, commit: string, path: string): string | undefined {
+export function showFile(workspaceRoot: string, commit: string, path: string): string | undefined {
   try {
     return execFileSync('git', ['show', `${commit}:${path}`], {
-      cwd,
+      cwd: workspaceRoot,
       encoding: 'utf8',
       maxBuffer: 512 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -57,6 +57,6 @@ export function repoRoot(cwd: string): string {
   return git(cwd, ['rev-parse', '--show-toplevel']).trim();
 }
 
-export function currentHead(cwd: string): string {
-  return git(cwd, ['rev-parse', 'HEAD']).trim();
+export function currentHead(workspaceRoot: string): string {
+  return git(workspaceRoot, ['rev-parse', 'HEAD']).trim();
 }

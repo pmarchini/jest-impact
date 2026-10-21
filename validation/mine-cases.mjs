@@ -1,15 +1,15 @@
 // Sorts a repo's recent first-parent commits into the case categories, so a
 // real commit can be picked for each one.
 //
-//   node validation/mine-cases.mjs <workspace> <commit-count> <out.json>
+//   node validation/mine-cases.mjs <workspace-root> <commit-count> <out.json>
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
-const [workspace, count, outFile] = process.argv.slice(2);
+const [workspaceRoot, count, outFile] = process.argv.slice(2);
 const log = execFileSync(
   'git',
   ['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--name-status', '--format=@%H%x09%s', `-${count}`],
-  { cwd: workspace, encoding: 'utf8', maxBuffer: 1 << 30 },
+  { cwd: workspaceRoot, encoding: 'utf8', maxBuffer: 1 << 30 },
 );
 
 const commits = [];

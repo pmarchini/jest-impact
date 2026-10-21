@@ -5,7 +5,7 @@
   "patch": "synthetic-setup-file.patch",
   "expect": {
     "runAll": false,
-    "wholeProjects": [
+    "widenedProjects": [
       "libs/importer/jest.config.js"
     ]
   }

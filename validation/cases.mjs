@@ -1,6 +1,6 @@
 // Turns a repo's recent history into checked cases, using a Jest read trace as ground truth.
 //
-//   node validation/cases.mjs <workspace> <trace-dir> <commit-count> <out.json>
+//   node validation/cases.mjs <workspace-root> <trace-dir> <commit-count> <out.json>
 //
 // The trace (from trace-jest.cjs) says which files and npm packages each test
 // read at the snapshot commit. For every first-parent commit up to the snapshot,
@@ -12,8 +12,8 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { analyze } = await import(new URL('../src/analyze.ts', import.meta.url));
-const [workspace, traceDir, count, outFile] = process.argv.slice(2);
-const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
+const [workspaceRoot, traceDir, count, outFile] = process.argv.slice(2);
+const git = (...args) => execFileSync('git', args, { cwd: workspaceRoot, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 
 const traces = new Map();
 for (const name of readdirSync(traceDir).filter((n) => n.endsWith('.jsonl'))) {
@@ -30,7 +30,7 @@ const cases = [];
 try {
   for (const sha of commits) {
     git('checkout', '-q', '--detach', sha);
-    const report = await analyze({ workspaceRoot: workspace, base: `${sha}~1`, head: sha });
+    const report = await analyze({ workspaceRoot, base: `${sha}~1`, head: sha });
     const changed = new Set(git('diff', '--name-only', '--no-renames', `${sha}~1`, sha).split('\n').filter(Boolean));
     const changedPackages = new Set(report.changes.lockfile?.changedPackages ?? []);
 

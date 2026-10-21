@@ -66,7 +66,11 @@ function parseYarnBerry(content: string): LockGraph {
       dependencies: deps,
     });
   }
-  for (const deps of workspaces) for (const dep of deps) if (!dep.includes('@workspace:')) result.directDependencies.add(dep);
+  for (const deps of workspaces) {
+    for (const dep of deps) {
+      if (!dep.includes('@workspace:')) result.directDependencies.add(dep);
+    }
+  }
   return result;
 }
 
@@ -151,14 +155,17 @@ function parsePnpm(content: string): LockGraph {
   const idFor = (name: string, version: string): string | undefined => {
     if (version.startsWith('link:') || version.startsWith('workspace:')) return undefined;
     // Aliased dependencies record the real package's full spec as their version.
-    return /^\d/.test(version) || !version.includes('@') ? `${name}@${version}` : stripSlash(version);
+    const isAlias = !/^\d/.test(version) && version.includes('@');
+    return isAlias ? stripSlash(version) : `${name}@${version}`;
   };
   for (const [key, node] of Object.entries(nodes)) {
     const id = stripSlash(key);
     const deps = Object.entries<string>({ ...node?.dependencies, ...node?.optionalDependencies })
       .map(([name, version]) => idFor(name, String(version)))
       .filter((d): d is string => !!d);
-    const info = v9 ? meta[id.replace(/\(.*$/, '')] : node;
+    // v9 keys snapshots by id plus a "(peer deps)" suffix; packages are keyed without it.
+    const packageKey = id.replace(/\(.*$/, '');
+    const info = v9 ? meta[packageKey] : node;
     addPackage(result, {
       id,
       name: nameFromSpec(id),

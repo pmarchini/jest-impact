@@ -1,6 +1,6 @@
 // Changes every file the trace saw, one at a time, and checks each selection.
 //
-//   node validation/sweep.mjs <fixture-dir> <workspace> <out.jsonl> [shard] [shards]
+//   node validation/sweep.mjs <fixture-dir> <workspace-root> <out.jsonl> [shard] [shards]
 //
 // For each workspace file some test loaded, the change set is just that file,
 // modified, at the pinned commit. A test that loaded it and is not selected is
@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 
 const { analyze } = await import(new URL('../src/analyze.ts', import.meta.url));
-const [fixtureDir, workspace, outFile, shard = '0', shards = '1'] = process.argv.slice(2);
+const [fixtureDir, workspaceRoot, outFile, shard = '0', shards = '1'] = process.argv.slice(2);
 const fixture = JSON.parse(readFileSync(join(fixtureDir, 'fixture.json'), 'utf8'));
 const loadedBy = new Map();
 for (const line of gunzipSync(readFileSync(join(fixtureDir, fixture.trace))).toString('utf8').split('\n').filter(Boolean)) {
@@ -23,7 +23,7 @@ writeFileSync(outFile, '');
 let done = 0;
 for (const path of files) {
   const report = await analyze({
-    workspaceRoot: workspace,
+    workspaceRoot,
     base: fixture.commit,
     head: fixture.commit,
     link: false,

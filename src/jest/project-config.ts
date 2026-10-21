@@ -1,5 +1,5 @@
-import { createRequire } from 'node:module';
 import { dirname, isAbsolute, normalize, resolve } from 'node:path';
+import { inDirectory } from '../in-directory.ts';
 import { ConfigEvaluator, interopDefault, packageName, resolveLocal } from './evaluate.ts';
 
 /** The parts of a Jest project config the analyzer needs, with paths made absolute. */
@@ -41,44 +41,11 @@ export async function loadJestProjectConfig(
 ): Promise<JestProjectConfig> {
   // Absolute before the config's directory becomes the cwd below.
   const configFile = resolve(file);
-  const missingBefore = new Set(evaluator.missingPackages);
-  const configModules = new Set<string>();
-  const runtimeInputs = new Set<string>();
-  const configPackages = new Set<string>(['jest']);
 
   // Jest usually runs per package from a workspace script, so shared configs
   // may read the package directory from process.cwd(). Mirror that here.
-  const { rootDir, merged } = await inDirectory(dirname(configFile), async () => {
-    const raw = await evaluator.loadConfig(configFile);
-    const rootDir = resolve(dirname(configFile), typeof raw.rootDir === 'string' ? raw.rootDir : '.');
-    const deps = evaluator.dependenciesOf(configFile);
-    for (const file of deps.files) configModules.add(file);
-    for (const name of deps.packages) configPackages.add(name);
-    if (typeof raw.preset !== 'string') return { rootDir, merged: raw };
-
-    const preset = loadPreset(raw.preset, rootDir, evaluator);
-    if (preset.file) {
-      const presetDeps = evaluator.dependenciesOf(preset.file);
-      for (const file of presetDeps.files) configModules.add(file);
-      for (const name of presetDeps.packages) configPackages.add(name);
-    }
-    if (preset.packageName) configPackages.add(preset.packageName);
-    return { rootDir, merged: mergePreset(preset.config, raw) };
-  });
-
-  const ref = (value: string) => trackReference(value, rootDir, runtimeInputs, configPackages);
-
-  for (const key of ['setupFiles', 'setupFilesAfterEnv', 'snapshotSerializers']) {
-    for (const value of stringArray(merged[key])) ref(value);
-  }
-  for (const key of ['globalSetup', 'globalTeardown', 'testEnvironment', 'resolver', 'snapshotResolver', 'testRunner', 'testSequencer']) {
-    const value = merged[key];
-    if (typeof value === 'string') ref(environmentName(key, value));
-  }
-  for (const [, transformer] of Object.entries(objectOf(merged.transform))) {
-    const name = Array.isArray(transformer) ? transformer[0] : transformer;
-    if (typeof name === 'string') ref(name);
-  }
+  const { rootDir, merged, configModules, configPackages } = await inDirectory(dirname(configFile), () => evaluateConfig(configFile, evaluator));
+  const references = runtimeReferences(merged, rootDir, evaluator);
 
   const moduleNameMapper = Object.entries(objectOf(merged.moduleNameMapper)).map(
     ([pattern, target]): [string, string[]] => [
@@ -109,21 +76,40 @@ export async function loadJestProjectConfig(
     moduleDirectories: stringArray(merged.moduleDirectories ?? ['node_modules']),
     configModules: [...configModules],
     mapperTargets,
-    runtimeInputs: [...runtimeInputs],
-    configPackages: [...configPackages],
+    runtimeInputs: [...references.files],
+    configPackages: [...new Set([...configPackages, ...references.packages])],
     exportConditions: stringArray(objectOf(merged.testEnvironmentOptions).customExportConditions),
-    missingPackages: [...evaluator.missingPackages].filter((p) => !missingBefore.has(p)),
+    missingPackages: [...evaluator.missingPackages],
   };
 }
 
-async function inDirectory<T>(dir: string, run: () => Promise<T>): Promise<T> {
-  const previous = process.cwd();
-  process.chdir(dir);
-  try {
-    return await run();
-  } finally {
-    process.chdir(previous);
+type EvaluatedConfig = {
+  rootDir: string;
+  /** The config with its preset merged in. */
+  merged: RawConfig;
+  /** Local files evaluated on the way: the config, its preset and their helpers. */
+  configModules: Set<string>;
+  /** Packages evaluated on the way, the preset included. */
+  configPackages: Set<string>;
+};
+
+/** Evaluates a config file and its preset. Runs from the config's directory, see the caller. */
+async function evaluateConfig(configFile: string, evaluator: ConfigEvaluator): Promise<EvaluatedConfig> {
+  const raw = await evaluator.loadConfig(configFile);
+  const rootDir = resolve(dirname(configFile), typeof raw.rootDir === 'string' ? raw.rootDir : '.');
+  const deps = evaluator.dependenciesOf(configFile);
+  const configModules = new Set(deps.files);
+  const configPackages = new Set(['jest', ...deps.packages]);
+  if (typeof raw.preset !== 'string') return { rootDir, merged: raw, configModules, configPackages };
+
+  const preset = loadPreset(raw.preset, rootDir, evaluator);
+  if (preset.file) {
+    const presetDeps = evaluator.dependenciesOf(preset.file);
+    for (const depFile of presetDeps.files) configModules.add(depFile);
+    for (const name of presetDeps.packages) configPackages.add(name);
   }
+  if (preset.packageName) configPackages.add(preset.packageName);
+  return { rootDir, merged: mergePreset(preset.config, raw), configModules, configPackages };
 }
 
 function loadPreset(
@@ -140,13 +126,20 @@ function loadPreset(
   }
   const name = packageName(presetPath);
   const request = /\.(json|[mc]?js)$/.test(presetPath) ? presetPath : `${presetPath}/jest-preset`;
-  const fromFile = resolve(rootDir, 'jest.config.js');
-  const workspaceFile = evaluator.workspaceModule(request, fromFile);
+  const workspaceFile = evaluator.workspaceModule(request, resolutionAnchor(rootDir));
   if (workspaceFile) {
     return { config: asConfig(interopDefault(evaluator.loadModule(workspaceFile))), file: workspaceFile, packageName: name };
   }
-  const value = evaluator.requirePackage(request, fromFile);
+  const value = evaluator.requirePackage(request, resolutionAnchor(rootDir));
   return { config: asConfig(interopDefault(value)), packageName: name };
+}
+
+/**
+ * Where to resolve a package specifier from so that it lands where a config in
+ * rootDir would find it. createRequire wants a file path; this one need not exist.
+ */
+function resolutionAnchor(rootDir: string): string {
+  return resolve(rootDir, 'jest.config.js');
 }
 
 /** Jest's preset merge: arrays of setup files concatenate, maps let the config win. */
@@ -165,30 +158,50 @@ function mergePreset(preset: RawConfig, config: RawConfig): RawConfig {
   return merged;
 }
 
+type RuntimeReferences = {
+  /** Local files Jest loads around every test. */
+  files: Set<string>;
+  /** Packages Jest loads around every test. */
+  packages: Set<string>;
+};
+
 /**
- * Records a module the config points at. Local files become config inputs;
- * anything else is a package whose upgrade changes every test of the project.
+ * The modules a config points at for the test runtime: setup files,
+ * serializers, the environment, resolver, runner, sequencer and transforms.
+ * Local files become runtime inputs; anything else is a package whose upgrade
+ * changes every test of the project, and a workspace package counts as both.
  */
-function trackReference(value: string, rootDir: string, inputs: Set<string>, packages: Set<string>): void {
-  const spec = replaceRootDir(value, rootDir);
-  if (spec.startsWith('.') || isAbsolute(spec)) {
-    const file = resolveLocal(resolve(rootDir, spec));
-    if (file) inputs.add(file);
-    return;
+function runtimeReferences(merged: RawConfig, rootDir: string, evaluator: ConfigEvaluator): RuntimeReferences {
+  const references: RuntimeReferences = { files: new Set(), packages: new Set() };
+  const record = (specifier: string) => {
+    const spec = replaceRootDir(specifier, rootDir);
+    if (spec.startsWith('.') || isAbsolute(spec)) {
+      const file = resolveLocal(resolve(rootDir, spec));
+      if (file) references.files.add(file);
+      return;
+    }
+    references.packages.add(packageName(spec));
+    const workspaceFile = evaluator.workspaceModule(spec, resolutionAnchor(rootDir));
+    if (workspaceFile) references.files.add(workspaceFile);
+  };
+
+  for (const key of ['setupFiles', 'setupFilesAfterEnv', 'snapshotSerializers']) {
+    for (const specifier of stringArray(merged[key])) record(specifier);
   }
-  packages.add(packageName(spec));
-  try {
-    const file = createRequire(resolve(rootDir, 'jest.config.js')).resolve(spec);
-    if (!file.includes('/node_modules/')) inputs.add(file);
-  } catch {
-    // Not installed; the package name alone is enough to match lockfile changes.
+  for (const key of ['globalSetup', 'globalTeardown', 'resolver', 'snapshotResolver', 'testRunner', 'testSequencer']) {
+    if (typeof merged[key] === 'string') record(merged[key]);
   }
+  if (typeof merged.testEnvironment === 'string') record(environmentPackage(merged.testEnvironment));
+  for (const [, transformer] of Object.entries(objectOf(merged.transform))) {
+    const specifier = Array.isArray(transformer) ? transformer[0] : transformer;
+    if (typeof specifier === 'string') record(specifier);
+  }
+  return references;
 }
 
-function environmentName(key: string, value: string): string {
-  if (key !== 'testEnvironment') return value;
-  if (value === 'node' || value === 'jsdom') return `jest-environment-${value}`;
-  return value;
+/** Jest accepts `node` and `jsdom` as short names for the packages that implement them. */
+function environmentPackage(testEnvironment: string): string {
+  return testEnvironment === 'node' || testEnvironment === 'jsdom' ? `jest-environment-${testEnvironment}` : testEnvironment;
 }
 
 /** Absolute mapper targets are normalised so configs in different directories compare equal. */
