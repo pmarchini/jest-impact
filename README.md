@@ -50,7 +50,7 @@ run-tests:
     include:
       - artifact: tests.yml
         job: plan-tests
-    strategy: depend
+    strategy: mirror   # GitLab recommends mirror over depend: the trigger job then reports the child pipeline's status
 ```
 
 `--gitlab-include` adds `include: local` entries to the child pipeline, and `--gitlab-extends` makes every job extend a hidden job from them, for image, cache and tags.
